@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lucel Digital — YouTube → Livro</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Lato:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --gold: #C9A84C; --gold-light: #E8C96A; --black: #090909;
+  --dark: #111; --dark2: #181818; --white: #F5F0E8; --gray: #888;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--black); color:var(--white); font-family:'Lato',sans-serif; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; }
+
+.card {
+  background:var(--dark2); border:1px solid #2a2a2a;
+  border-top:4px solid var(--gold); border-radius:16px;
+  padding:48px 44px; width:100%; max-width:520px;
+}
+.logo { font-family:'Bebas Neue'; font-size:28px; color:var(--gold); letter-spacing:2px; margin-bottom:6px; }
+h1 { font-family:'Bebas Neue'; font-size:42px; line-height:1.05; margin-bottom:8px; }
+h1 em { color:var(--gold); font-style:normal; }
+.subtitle { font-size:14px; color:var(--gray); margin-bottom:36px; line-height:1.6; }
+
+label { font-size:12px; letter-spacing:2px; text-transform:uppercase; color:var(--gold); font-weight:700; display:block; margin-bottom:8px; }
+input {
+  width:100%; background:var(--dark); border:1px solid #2a2a2a;
+  border-radius:6px; padding:14px 16px; color:var(--white);
+  font-size:15px; font-family:'Lato',sans-serif; margin-bottom:20px;
+  transition:border-color .2s; outline:none;
+}
+input:focus { border-color:var(--gold); }
+input::placeholder { color:#444; }
+
+.btn {
+  width:100%; background:var(--gold); color:var(--black);
+  font-weight:900; font-size:15px; letter-spacing:2px; text-transform:uppercase;
+  padding:18px; border-radius:6px; border:none; cursor:pointer;
+  transition:all .25s; font-family:'Lato',sans-serif;
+}
+.btn:hover { background:var(--gold-light); transform:translateY(-2px); }
+.btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
+
+/* PROGRESSO */
+#progresso { display:none; margin-top:32px; }
+.prog-msg { font-size:15px; color:var(--white); margin-bottom:14px; text-align:center; min-height:24px; }
+.prog-bar-bg { background:#222; border-radius:100px; height:8px; overflow:hidden; }
+.prog-bar { height:8px; background:linear-gradient(to right,var(--gold-light),var(--gold)); border-radius:100px; transition:width .5s ease; width:0%; }
+.prog-pct { text-align:right; font-size:12px; color:var(--gray); margin-top:6px; }
+
+/* ETAPAS */
+.etapas { display:flex; flex-direction:column; gap:8px; margin-top:24px; }
+.etapa { display:flex; gap:12px; align-items:center; font-size:13px; color:#555; transition:color .3s; }
+.etapa.ativa { color:var(--white); }
+.etapa.feita { color:var(--gold); }
+.etapa-dot { width:8px; height:8px; border-radius:50%; background:#333; flex-shrink:0; transition:background .3s; }
+.etapa.ativa .etapa-dot { background:var(--gold); box-shadow:0 0 8px rgba(201,168,76,0.6); }
+.etapa.feita .etapa-dot { background:var(--gold); }
+
+/* DOWNLOAD */
+#download-area { display:none; margin-top:28px; text-align:center; }
+.btn-download {
+  display:inline-block; background:var(--gold); color:var(--black);
+  font-weight:900; font-size:15px; letter-spacing:2px; text-transform:uppercase;
+  padding:18px 40px; border-radius:6px; text-decoration:none;
+  transition:all .25s; box-shadow:0 0 30px rgba(201,168,76,0.3);
+}
+.btn-download:hover { background:var(--gold-light); transform:translateY(-2px); }
+.download-note { font-size:13px; color:var(--gray); margin-top:12px; }
+
+/* ERRO */
+#erro-area { display:none; margin-top:20px; background:rgba(220,50,50,0.1); border:1px solid rgba(220,50,50,0.3); border-radius:8px; padding:16px; font-size:14px; color:#ff6b6b; text-align:center; }
+
+.reiniciar { display:none; margin-top:20px; text-align:center; }
+.reiniciar a { color:var(--gold); font-size:13px; cursor:pointer; text-decoration:underline; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo">LUCEL DIGITAL</div>
+  <h1>YouTube<br>→ <em>Livro</em></h1>
+  <p class="subtitle">Cole o link do seu vídeo. Geramos o livro diagramado em .docx pronto para publicar.</p>
+
+  <div id="form-area">
+    <label>Link do YouTube</label>
+    <input type="url" id="yt-url" placeholder="https://www.youtube.com/watch?v=..." />
+
+    <label>Seu nome (aparece como autor)</label>
+    <input type="text" id="nome" placeholder="Ex: Pastor João Silva" />
+
+    <label>Seu e-mail</label>
+    <input type="email" id="email" placeholder="seuemail@gmail.com" />
+
+    <label>Seu WhatsApp (com DDD)</label>
+    <input type="text" id="whatsapp" placeholder="11987654321" />
+
+    <button class="btn" id="btn-processar" onclick="iniciar()">Transformar em Livro →</button>
+  </div>
+
+  <div id="progresso">
+    <div class="prog-msg" id="prog-msg">Iniciando...</div>
+    <div class="prog-bar-bg"><div class="prog-bar" id="prog-bar"></div></div>
+    <div class="prog-pct" id="prog-pct">0%</div>
+    <div class="etapas">
+      <div class="etapa" id="e1">⏬ <span class="etapa-dot"></span> Baixando áudio do YouTube</div>
+      <div class="etapa" id="e2">🎙️ <span class="etapa-dot"></span> Transcrevendo o áudio</div>
+      <div class="etapa" id="e3">🤖 <span class="etapa-dot"></span> Criando os 12 capítulos com IA</div>
+      <div class="etapa" id="e4">📐 <span class="etapa-dot"></span> Diagramando o livro</div>
+      <div class="etapa" id="e5">📲 <span class="etapa-dot"></span> Enviando notificações</div>
+    </div>
+  </div>
+
+  <div id="download-area">
+    <div style="font-size:48px;margin-bottom:16px;">🎉</div>
+    <div style="font-family:'Bebas Neue';font-size:28px;color:var(--gold);margin-bottom:8px;">Livro Pronto!</div>
+    <p id="titulo-livro" style="font-size:14px;color:var(--gray);margin-bottom:24px;"></p>
+    <a id="btn-download" href="#" class="btn-download">📥 Baixar meu Livro (.docx)</a>
+    <p class="download-note">Aviso também enviado para seu e-mail e WhatsApp</p>
+  </div>
+
+  <div id="erro-area"></div>
+  <div class="reiniciar" id="reiniciar"><a onclick="reiniciar()">← Tentar novamente</a></div>
+</div>
+
+<script>
+let jobId = null;
+let polling = null;
+
+async function iniciar() {
+  const url = document.getElementById('yt-url').value.trim();
+  const nome = document.getElementById('nome').value.trim();
+  const email = document.getElementById('email').value.trim();
+  const whatsapp = document.getElementById('whatsapp').value.trim();
+
+  if (!url) return alert('Cole o link do YouTube!');
+  if (!email) return alert('Informe seu e-mail!');
+
+  document.getElementById('btn-processar').disabled = true;
+  document.getElementById('form-area').style.opacity = '0.4';
+  document.getElementById('progresso').style.display = 'block';
+
+  try {
+    const resp = await fetch('/api/processar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ youtubeUrl: url, nome, email, whatsapp })
+    });
+    const data = await resp.json();
+    if (!data.jobId) throw new Error(data.erro || 'Erro ao iniciar');
+    jobId = data.jobId;
+    polling = setInterval(verificarStatus, 3000);
+  } catch(e) {
+    mostrarErro(e.message);
+  }
+}
+
+async function verificarStatus() {
+  try {
+    const resp = await fetch(`/api/status/${jobId}`);
+    const job = await resp.json();
+
+    document.getElementById('prog-msg').textContent = job.mensagem || '...';
+    document.getElementById('prog-bar').style.width = (job.progresso || 0) + '%';
+    document.getElementById('prog-pct').textContent = (job.progresso || 0) + '%';
+
+    // Atualizar etapas
+    const etapaMap = { baixando: 1, transcrevendo: 2, gerando: 3, diagramando: 4, notificando: 5, pronto: 5 };
+    const etapaAtual = etapaMap[job.status] || 0;
+    for (let i = 1; i <= 5; i++) {
+      const el = document.getElementById(`e${i}`);
+      el.className = 'etapa' + (i < etapaAtual ? ' feita' : i === etapaAtual ? ' ativa' : '');
+    }
+
+    if (job.status === 'pronto') {
+      clearInterval(polling);
+      document.getElementById('progresso').style.display = 'none';
+      document.getElementById('download-area').style.display = 'block';
+      document.getElementById('titulo-livro').textContent = job.titulo ? `"${job.titulo}"` : '';
+      document.getElementById('btn-download').href = `/api/download/${jobId}`;
+    } else if (job.status === 'erro') {
+      clearInterval(polling);
+      mostrarErro(job.mensagem || job.erro || 'Erro desconhecido');
+    }
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+function mostrarErro(msg) {
+  document.getElementById('progresso').style.display = 'none';
+  document.getElementById('erro-area').style.display = 'block';
+  document.getElementById('erro-area').textContent = '❌ ' + msg;
+  document.getElementById('reiniciar').style.display = 'block';
+  document.getElementById('btn-processar').disabled = false;
+}
+
+function reiniciar() {
+  clearInterval(polling);
+  document.getElementById('form-area').style.opacity = '1';
+  document.getElementById('progresso').style.display = 'none';
+  document.getElementById('download-area').style.display = 'none';
+  document.getElementById('erro-area').style.display = 'none';
+  document.getElementById('reiniciar').style.display = 'none';
+  document.getElementById('btn-processar').disabled = false;
+}
+</script>
+</body>
+</html>
