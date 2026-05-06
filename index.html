@@ -6,140 +6,344 @@
 <title>Lucel Digital — YouTube → Livro</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Lato:wght@300;400;700;900&display=swap" rel="stylesheet">
 <style>
-:root {
-  --gold: #C9A84C; --gold-light: #E8C96A; --black: #090909;
-  --dark: #111; --dark2: #181818; --white: #F5F0E8; --gray: #888;
-}
-* { margin:0; padding:0; box-sizing:border-box; }
-body { background:var(--black); color:var(--white); font-family:'Lato',sans-serif; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px; }
+:root{--gold:#C9A84C;--gold-light:#E8C96A;--black:#090909;--dark:#111;--dark2:#181818;--white:#F5F0E8;--gray:#888;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--black);color:var(--white);font-family:'Lato',sans-serif;min-height:100vh;}
 
-.card {
-  background:var(--dark2); border:1px solid #2a2a2a;
-  border-top:4px solid var(--gold); border-radius:16px;
-  padding:48px 44px; width:100%; max-width:520px;
+/* ── TELA DE ABERTURA ── */
+#tela-abertura{
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;text-align:center;padding:40px 24px;
+  position:relative;overflow:hidden;
 }
-.logo { font-family:'Bebas Neue'; font-size:28px; color:var(--gold); letter-spacing:2px; margin-bottom:6px; }
-h1 { font-family:'Bebas Neue'; font-size:42px; line-height:1.05; margin-bottom:8px; }
-h1 em { color:var(--gold); font-style:normal; }
-.subtitle { font-size:14px; color:var(--gray); margin-bottom:36px; line-height:1.6; }
+#tela-abertura::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse 80% 55% at 50% 30%,rgba(201,168,76,0.07) 0%,transparent 70%);
+  pointer-events:none;
+}
+.abertura-logo{font-family:'Bebas Neue';font-size:22px;color:var(--gold);letter-spacing:3px;margin-bottom:48px;}
+.abertura-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);
+  color:var(--gold);font-size:11px;font-weight:700;letter-spacing:2px;
+  text-transform:uppercase;padding:8px 18px;border-radius:100px;margin-bottom:28px;
+}
+.abertura-titulo{
+  font-family:'Bebas Neue';font-size:clamp(52px,10vw,110px);
+  line-height:0.93;letter-spacing:2px;margin-bottom:20px;
+}
+.abertura-titulo em{color:var(--gold);font-style:normal;}
+.abertura-desc{
+  font-size:clamp(14px,2vw,18px);color:rgba(245,240,232,0.55);
+  font-weight:300;max-width:520px;line-height:1.7;margin:0 auto 48px;
+}
+.abertura-passos{
+  display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-bottom:48px;
+}
+.passo{
+  background:var(--dark2);border:1px solid #252525;border-radius:8px;
+  padding:12px 18px;font-size:13px;color:rgba(245,240,232,0.6);
+  display:flex;align-items:center;gap:8px;
+}
+.passo-num{
+  font-family:'Bebas Neue';font-size:18px;color:var(--gold);
+  width:24px;height:24px;border-radius:50%;border:1px solid var(--gold);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.btn-comecar{
+  display:inline-block;background:var(--gold);color:var(--black);
+  font-weight:900;font-size:16px;letter-spacing:2px;text-transform:uppercase;
+  padding:20px 56px;border-radius:6px;border:none;cursor:pointer;
+  font-family:'Lato',sans-serif;transition:all .25s;
+  box-shadow:0 0 40px rgba(201,168,76,0.2);
+}
+.btn-comecar:hover{background:var(--gold-light);transform:translateY(-3px);box-shadow:0 8px 50px rgba(201,168,76,0.4);}
+.abertura-preco-box{margin-top:24px;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.abertura-preco-label{font-size:12px;letter-spacing:3px;text-transform:uppercase;color:var(--gray);}
+.abertura-preco-valor{font-family:'Bebas Neue';font-size:72px;color:var(--gold);line-height:1;letter-spacing:2px;}
 
-label { font-size:12px; letter-spacing:2px; text-transform:uppercase; color:var(--gold); font-weight:700; display:block; margin-bottom:8px; }
-input {
-  width:100%; background:var(--dark); border:1px solid #2a2a2a;
-  border-radius:6px; padding:14px 16px; color:var(--white);
-  font-size:15px; font-family:'Lato',sans-serif; margin-bottom:20px;
-  transition:border-color .2s; outline:none;
-}
-input:focus { border-color:var(--gold); }
-input::placeholder { color:#444; }
+/* ── TELAS DO FLUXO ── */
+#fluxo{display:none;min-height:100vh;align-items:center;justify-content:center;padding:40px 20px;}
+#fluxo.ativo{display:flex;}
 
-.btn {
-  width:100%; background:var(--gold); color:var(--black);
-  font-weight:900; font-size:15px; letter-spacing:2px; text-transform:uppercase;
-  padding:18px; border-radius:6px; border:none; cursor:pointer;
-  transition:all .25s; font-family:'Lato',sans-serif;
+.card{
+  background:var(--dark2);border:1px solid #2a2a2a;border-top:4px solid var(--gold);
+  border-radius:16px;padding:48px 44px;width:100%;max-width:520px;
 }
-.btn:hover { background:var(--gold-light); transform:translateY(-2px); }
-.btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
+.card-logo{font-family:'Bebas Neue';font-size:22px;color:var(--gold);letter-spacing:2px;margin-bottom:24px;}
+
+.tela{display:none;}
+.tela.ativa{display:block;}
+
+h2{font-family:'Bebas Neue';font-size:36px;line-height:1.05;margin-bottom:8px;}
+h2 em{color:var(--gold);font-style:normal;}
+.subtitle{font-size:14px;color:var(--gray);margin-bottom:28px;line-height:1.6;}
+
+label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);font-weight:700;display:block;margin-bottom:7px;}
+input{
+  width:100%;background:var(--dark);border:1px solid #2a2a2a;border-radius:6px;
+  padding:13px 15px;color:var(--white);font-size:15px;font-family:'Lato',sans-serif;
+  margin-bottom:18px;transition:border-color .2s;outline:none;
+}
+input:focus{border-color:var(--gold);}
+input::placeholder{color:#444;}
+
+.btn{
+  width:100%;background:var(--gold);color:var(--black);font-weight:900;
+  font-size:15px;letter-spacing:2px;text-transform:uppercase;padding:18px;
+  border-radius:6px;border:none;cursor:pointer;transition:all .25s;font-family:'Lato',sans-serif;
+}
+.btn:hover{background:var(--gold-light);transform:translateY(-1px);}
+.btn-outline{
+  width:100%;background:transparent;color:var(--gray);border:1px solid #333;
+  font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;
+  padding:14px;border-radius:6px;cursor:pointer;font-family:'Lato',sans-serif;
+  transition:all .2s;margin-top:10px;
+}
+.btn-outline:hover{border-color:var(--gray);color:var(--white);}
+
+/* PIX */
+.pix-box{background:var(--dark);border:1px solid #2a2a2a;border-radius:10px;padding:24px;margin:24px 0;text-align:center;}
+.pix-valor{font-family:'Bebas Neue';font-size:56px;color:var(--gold);line-height:1;}
+.pix-chave-box{
+  background:#0a0a0a;border:1px solid #333;border-radius:8px;
+  padding:14px 16px;margin:16px 0;display:flex;align-items:center;
+  justify-content:space-between;gap:12px;
+}
+.pix-chave{font-size:14px;color:var(--white);word-break:break-all;text-align:left;}
+.btn-copiar{
+  background:var(--gold);color:var(--black);border:none;border-radius:6px;
+  padding:8px 16px;font-size:12px;font-weight:900;letter-spacing:1px;
+  text-transform:uppercase;cursor:pointer;white-space:nowrap;
+  font-family:'Lato',sans-serif;transition:all .2s;flex-shrink:0;
+}
+.btn-copiar:hover{background:var(--gold-light);}
+.pix-instrucoes{font-size:13px;color:var(--gray);line-height:1.7;margin-top:8px;}
+.pix-instrucoes strong{color:var(--white);}
+.aviso-box{
+  background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.2);
+  border-radius:8px;padding:16px;margin-top:20px;font-size:13px;
+  color:rgba(245,240,232,0.7);line-height:1.6;text-align:center;
+}
+.aviso-box strong{color:var(--gold);}
+
+/* AGUARDANDO */
+.center{text-align:center;}
+.big-icon{font-size:56px;margin-bottom:16px;}
+.big-titulo{font-family:'Bebas Neue';font-size:32px;color:var(--gold);margin-bottom:8px;}
+.big-desc{font-size:14px;color:var(--gray);line-height:1.7;margin-bottom:24px;}
+.pulse{display:inline-block;width:10px;height:10px;background:var(--gold);border-radius:50%;animation:pulse 1.5s infinite;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.4;transform:scale(0.7);}}
+.status-line{display:flex;align-items:center;justify-content:center;gap:10px;font-size:13px;color:var(--gray);}
 
 /* PROGRESSO */
-#progresso { display:none; margin-top:32px; }
-.prog-msg { font-size:15px; color:var(--white); margin-bottom:14px; text-align:center; min-height:24px; }
-.prog-bar-bg { background:#222; border-radius:100px; height:8px; overflow:hidden; }
-.prog-bar { height:8px; background:linear-gradient(to right,var(--gold-light),var(--gold)); border-radius:100px; transition:width .5s ease; width:0%; }
-.prog-pct { text-align:right; font-size:12px; color:var(--gray); margin-top:6px; }
-
-/* ETAPAS */
-.etapas { display:flex; flex-direction:column; gap:8px; margin-top:24px; }
-.etapa { display:flex; gap:12px; align-items:center; font-size:13px; color:#555; transition:color .3s; }
-.etapa.ativa { color:var(--white); }
-.etapa.feita { color:var(--gold); }
-.etapa-dot { width:8px; height:8px; border-radius:50%; background:#333; flex-shrink:0; transition:background .3s; }
-.etapa.ativa .etapa-dot { background:var(--gold); box-shadow:0 0 8px rgba(201,168,76,0.6); }
-.etapa.feita .etapa-dot { background:var(--gold); }
+.prog-msg{font-size:15px;color:var(--white);margin-bottom:14px;text-align:center;min-height:24px;}
+.prog-bar-bg{background:#222;border-radius:100px;height:8px;overflow:hidden;margin-bottom:6px;}
+.prog-bar{height:8px;background:linear-gradient(to right,var(--gold-light),var(--gold));border-radius:100px;transition:width .6s ease;width:0%;}
+.prog-pct{text-align:right;font-size:12px;color:var(--gray);margin-bottom:24px;}
+.etapas{display:flex;flex-direction:column;gap:10px;}
+.etapa{display:flex;gap:12px;align-items:center;font-size:13px;color:#555;transition:color .3s;}
+.etapa.ativa{color:var(--white);}
+.etapa.feita{color:var(--gold);}
+.etapa-dot{width:8px;height:8px;border-radius:50%;background:#333;flex-shrink:0;transition:all .3s;}
+.etapa.ativa .etapa-dot{background:var(--gold);box-shadow:0 0 8px rgba(201,168,76,0.6);}
+.etapa.feita .etapa-dot{background:var(--gold);}
 
 /* DOWNLOAD */
-#download-area { display:none; margin-top:28px; text-align:center; }
-.btn-download {
-  display:inline-block; background:var(--gold); color:var(--black);
-  font-weight:900; font-size:15px; letter-spacing:2px; text-transform:uppercase;
-  padding:18px 40px; border-radius:6px; text-decoration:none;
-  transition:all .25s; box-shadow:0 0 30px rgba(201,168,76,0.3);
+.btn-download{
+  display:block;width:100%;background:var(--gold);color:var(--black);
+  font-weight:900;font-size:15px;letter-spacing:2px;text-transform:uppercase;
+  padding:18px;border-radius:6px;text-decoration:none;transition:all .25s;
+  text-align:center;box-shadow:0 0 30px rgba(201,168,76,0.25);
 }
-.btn-download:hover { background:var(--gold-light); transform:translateY(-2px); }
-.download-note { font-size:13px; color:var(--gray); margin-top:12px; }
+.btn-download:hover{background:var(--gold-light);transform:translateY(-2px);}
+.download-note{font-size:12px;color:var(--gray);margin-top:12px;text-align:center;}
 
 /* ERRO */
-#erro-area { display:none; margin-top:20px; background:rgba(220,50,50,0.1); border:1px solid rgba(220,50,50,0.3); border-radius:8px; padding:16px; font-size:14px; color:#ff6b6b; text-align:center; }
+.erro-box{
+  background:rgba(220,50,50,0.08);border:1px solid rgba(220,50,50,0.25);
+  border-radius:8px;padding:16px;font-size:14px;color:#ff6b6b;
+  text-align:center;margin-bottom:20px;line-height:1.6;
+}
 
-.reiniciar { display:none; margin-top:20px; text-align:center; }
-.reiniciar a { color:var(--gold); font-size:13px; cursor:pointer; text-decoration:underline; }
+@media(max-width:500px){
+  .card{padding:32px 20px;}
+  .pix-valor{font-size:44px;}
+  .abertura-passos{flex-direction:column;align-items:center;}
+  .btn-comecar{padding:18px 40px;font-size:14px;}
+}
 </style>
 </head>
 <body>
 
-<div class="card">
-  <div class="logo">LUCEL DIGITAL</div>
-  <h1>YouTube<br>→ <em>Livro</em></h1>
-  <p class="subtitle">Cole o link do seu vídeo. Geramos o livro diagramado em .docx pronto para publicar.</p>
+<!-- ── TELA DE ABERTURA ── -->
+<div id="tela-abertura">
+  <div class="abertura-logo">LUCEL DIGITAL</div>
+  <div class="abertura-badge">▶ YouTube → Livro</div>
+  <h1 class="abertura-titulo">Seu vídeo<br>vira um <em>Livro</em></h1>
+  <p class="abertura-desc">Cole o link do seu vídeo do YouTube. Transcrevemos, organizamos em 12 capítulos, diagramamos e entregamos o .docx pronto para vender na Amazon.</p>
 
-  <div id="form-area">
-    <label>Link do YouTube</label>
-    <input type="url" id="yt-url" placeholder="https://www.youtube.com/watch?v=..." />
-
-    <label>Seu nome (aparece como autor)</label>
-    <input type="text" id="nome" placeholder="Ex: Pastor João Silva" />
-
-    <label>Seu e-mail</label>
-    <input type="email" id="email" placeholder="seuemail@gmail.com" />
-
-    <label>Seu WhatsApp (com DDD)</label>
-    <input type="text" id="whatsapp" placeholder="11987654321" />
-
-    <button class="btn" id="btn-processar" onclick="iniciar()">Transformar em Livro →</button>
+  <div class="abertura-passos">
+    <div class="passo"><span class="passo-num">1</span> Cole o link do vídeo</div>
+    <div class="passo"><span class="passo-num">2</span> Faça o PIX R$ 49,90</div>
+    <div class="passo"><span class="passo-num">3</span> Baixe o livro .docx</div>
   </div>
 
-  <div id="progresso">
-    <div class="prog-msg" id="prog-msg">Iniciando...</div>
-    <div class="prog-bar-bg"><div class="prog-bar" id="prog-bar"></div></div>
-    <div class="prog-pct" id="prog-pct">0%</div>
-    <div class="etapas">
-      <div class="etapa" id="e1">⏬ <span class="etapa-dot"></span> Baixando áudio do YouTube</div>
-      <div class="etapa" id="e2">🎙️ <span class="etapa-dot"></span> Transcrevendo o áudio</div>
-      <div class="etapa" id="e3">🤖 <span class="etapa-dot"></span> Criando os 12 capítulos com IA</div>
-      <div class="etapa" id="e4">📐 <span class="etapa-dot"></span> Diagramando o livro</div>
-      <div class="etapa" id="e5">📲 <span class="etapa-dot"></span> Enviando notificações</div>
+  <button class="btn-comecar" onclick="comecar()">Transformar meu vídeo →</button>
+  <div class="abertura-preco-box">
+    <span class="abertura-preco-label">por apenas</span>
+    <span class="abertura-preco-valor">R$ 49,90</span>
+    <span class="abertura-preco-label">pagamento único via PIX</span>
+  </div>
+</div>
+
+<!-- ── FLUXO ── -->
+<div id="fluxo">
+  <div class="card">
+    <div class="card-logo">LUCEL DIGITAL</div>
+
+    <!-- TELA 1: FORMULÁRIO -->
+    <div id="tela-form" class="tela ativa">
+      <h2>Seus<br><em>Dados</em></h2>
+      <p class="subtitle">Preencha abaixo. Em seguida você verá as instruções de pagamento.</p>
+
+      <label>Link do YouTube</label>
+      <input type="url" id="yt-url" placeholder="https://www.youtube.com/watch?v=..."/>
+
+      <label>Seu nome (aparece como autor)</label>
+      <input type="text" id="nome" placeholder="Ex: Pastor João Silva"/>
+
+      <label>Seu e-mail</label>
+      <input type="email" id="email" placeholder="seuemail@gmail.com"/>
+
+      <label>Seu WhatsApp (com DDD)</label>
+      <input type="text" id="whatsapp" placeholder="11987654321"/>
+
+      <button class="btn" onclick="irParaPix()">Continuar para o Pagamento →</button>
+      <button class="btn-outline" onclick="voltarAbertura()">← Voltar</button>
     </div>
-  </div>
 
-  <div id="download-area">
-    <div style="font-size:48px;margin-bottom:16px;">🎉</div>
-    <div style="font-family:'Bebas Neue';font-size:28px;color:var(--gold);margin-bottom:8px;">Livro Pronto!</div>
-    <p id="titulo-livro" style="font-size:14px;color:var(--gray);margin-bottom:24px;"></p>
-    <a id="btn-download" href="#" class="btn-download">📥 Baixar meu Livro (.docx)</a>
-    <p class="download-note">Aviso também enviado para seu e-mail e WhatsApp</p>
-  </div>
+    <!-- TELA 2: PIX -->
+    <div id="tela-pix" class="tela">
+      <h2>Faça o<br><em>PIX</em></h2>
+      <p class="subtitle">Realize o pagamento e clique em "Já paguei" para confirmar seu pedido.</p>
 
-  <div id="erro-area"></div>
-  <div class="reiniciar" id="reiniciar"><a onclick="reiniciar()">← Tentar novamente</a></div>
+      <div class="pix-box">
+        <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gray);margin-bottom:8px;">Valor a pagar</div>
+        <div class="pix-valor">R$ 49,90</div>
+        <div style="font-size:13px;color:var(--gray);margin-top:4px;margin-bottom:20px;">pagamento único · por livro</div>
+        <div style="font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--gray);margin-bottom:8px;">Chave PIX (CNPJ)</div>
+        <div class="pix-chave-box">
+          <span class="pix-chave">37.871.182/0001-86</span>
+          <button class="btn-copiar" onclick="copiarPix(this,'37.871.182/0001-86')">Copiar</button>
+        </div>
+        <div class="pix-instrucoes"><strong>Editora de Livros Lucel Ltda ME</strong><br>Qualquer banco · Chave CNPJ</div>
+      </div>
+
+      <div class="aviso-box">
+        ✅ Após pagar, clique em <strong>"Já paguei"</strong>. Confirmaremos e seu livro será gerado automaticamente.
+      </div>
+      <br>
+      <button class="btn" onclick="confirmarPagamento()">✅ Já paguei — Confirmar pedido</button>
+      <button class="btn-outline" onclick="mostrarTela('tela-form')">← Corrigir dados</button>
+    </div>
+
+    <!-- TELA 3: AGUARDANDO -->
+    <div id="tela-aguardando" class="tela">
+      <div class="center">
+        <div class="big-icon">⏳</div>
+        <div class="big-titulo">Pedido Recebido!</div>
+        <p class="big-desc">Seu pedido foi registrado. Estamos confirmando o pagamento — assim que aprovado, o processamento começa automaticamente.</p>
+        <div class="aviso-box">
+          📧 Você receberá aviso no <strong>e-mail</strong> e no <strong>WhatsApp</strong> quando o livro estiver pronto.
+        </div>
+        <br>
+        <div class="status-line">
+          <span class="pulse"></span>
+          <span>Aguardando confirmação do pagamento...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TELA 4: PROCESSANDO -->
+    <div id="tela-processando" class="tela">
+      <h2>Gerando<br>seu <em>Livro</em></h2>
+      <p class="subtitle" style="margin-bottom:24px;">Acompanhe o progresso abaixo.</p>
+      <div class="prog-msg" id="prog-msg">Iniciando...</div>
+      <div class="prog-bar-bg"><div class="prog-bar" id="prog-bar"></div></div>
+      <div class="prog-pct" id="prog-pct">0%</div>
+      <div class="etapas">
+        <div class="etapa" id="e1">⏬ <span class="etapa-dot"></span> Baixando áudio do YouTube</div>
+        <div class="etapa" id="e2">🎙️ <span class="etapa-dot"></span> Transcrevendo o áudio</div>
+        <div class="etapa" id="e3">🤖 <span class="etapa-dot"></span> Criando os 12 capítulos com IA</div>
+        <div class="etapa" id="e4">📐 <span class="etapa-dot"></span> Diagramando o livro</div>
+        <div class="etapa" id="e5">📲 <span class="etapa-dot"></span> Enviando notificações</div>
+      </div>
+    </div>
+
+    <!-- TELA 5: PRONTO -->
+    <div id="tela-pronto" class="tela">
+      <div class="center">
+        <div class="big-icon">🎉</div>
+        <div class="big-titulo">Livro Pronto!</div>
+        <p id="titulo-livro" style="font-size:14px;color:var(--gray);margin-bottom:28px;font-style:italic;"></p>
+        <a id="btn-download" href="#" class="btn-download">📥 Baixar meu Livro (.docx)</a>
+        <p class="download-note">Aviso também enviado para seu e-mail e WhatsApp</p>
+      </div>
+    </div>
+
+    <!-- TELA 6: ERRO -->
+    <div id="tela-erro" class="tela">
+      <div class="erro-box" id="erro-msg">❌ Ocorreu um erro.</div>
+      <button class="btn" onclick="voltarAbertura()">← Tentar novamente</button>
+    </div>
+
+  </div>
 </div>
 
 <script>
 let jobId = null;
 let polling = null;
 
-async function iniciar() {
+function comecar() {
+  document.getElementById('tela-abertura').style.display = 'none';
+  document.getElementById('fluxo').classList.add('ativo');
+}
+
+function voltarAbertura() {
+  clearInterval(polling);
+  document.getElementById('fluxo').classList.remove('ativo');
+  document.getElementById('tela-abertura').style.display = 'flex';
+  mostrarTela('tela-form');
+}
+
+function mostrarTela(id) {
+  document.querySelectorAll('.tela').forEach(t => t.classList.remove('ativa'));
+  document.getElementById(id).classList.add('ativa');
+}
+
+function irParaPix() {
+  const url = document.getElementById('yt-url').value.trim();
+  const email = document.getElementById('email').value.trim();
+  if (!url) return alert('Cole o link do YouTube!');
+  if (!email) return alert('Informe seu e-mail!');
+  mostrarTela('tela-pix');
+}
+
+function copiarPix(btn, chave) {
+  navigator.clipboard.writeText(chave).then(() => {
+    btn.textContent = 'Copiado!';
+    setTimeout(() => btn.textContent = 'Copiar', 2000);
+  });
+}
+
+async function confirmarPagamento() {
   const url = document.getElementById('yt-url').value.trim();
   const nome = document.getElementById('nome').value.trim();
   const email = document.getElementById('email').value.trim();
   const whatsapp = document.getElementById('whatsapp').value.trim();
 
-  if (!url) return alert('Cole o link do YouTube!');
-  if (!email) return alert('Informe seu e-mail!');
-
-  document.getElementById('btn-processar').disabled = true;
-  document.getElementById('form-area').style.opacity = '0.4';
-  document.getElementById('progresso').style.display = 'block';
+  mostrarTela('tela-aguardando');
 
   try {
     const resp = await fetch('/api/pedido', {
@@ -148,65 +352,50 @@ async function iniciar() {
       body: JSON.stringify({ youtubeUrl: url, nome, email, whatsapp })
     });
     const data = await resp.json();
-    if (!data.jobId) throw new Error(data.erro || 'Erro ao iniciar');
+    if (!data.jobId) throw new Error(data.erro || 'Erro ao registrar pedido');
     jobId = data.jobId;
-    document.getElementById('prog-msg').textContent = '⏳ Pedido recebido! Aguardando confirmação do pagamento...';
-    document.getElementById('prog-bar').style.width = '5%';
-    document.getElementById('prog-pct').textContent = 'Aguardando pagamento';
     polling = setInterval(verificarStatus, 4000);
   } catch(e) {
-    mostrarErro(e.message);
+    mostrarTela('tela-erro');
+    document.getElementById('erro-msg').textContent = '❌ ' + e.message;
   }
 }
 
 async function verificarStatus() {
+  if (!jobId) return;
   try {
     const resp = await fetch(`/api/status/${jobId}`);
     const job = await resp.json();
 
-    document.getElementById('prog-msg').textContent = job.mensagem || '...';
-    document.getElementById('prog-bar').style.width = (job.progresso || 0) + '%';
-    document.getElementById('prog-pct').textContent = (job.progresso || 0) + '%';
+    if (job.status === 'aguardando_pagamento') return;
 
-    // Atualizar etapas
-    const etapaMap = { baixando: 1, transcrevendo: 2, gerando: 3, diagramando: 4, notificando: 5, pronto: 5 };
-    const etapaAtual = etapaMap[job.status] || 0;
-    for (let i = 1; i <= 5; i++) {
-      const el = document.getElementById(`e${i}`);
-      el.className = 'etapa' + (i < etapaAtual ? ' feita' : i === etapaAtual ? ' ativa' : '');
+    if (['iniciando','baixando','transcrevendo','gerando','diagramando','notificando'].includes(job.status)) {
+      mostrarTela('tela-processando');
+      document.getElementById('prog-msg').textContent = job.mensagem || '...';
+      document.getElementById('prog-bar').style.width = (job.progresso || 0) + '%';
+      document.getElementById('prog-pct').textContent = (job.progresso || 0) + '%';
+      const mapa = { baixando:1, transcrevendo:2, gerando:3, diagramando:4, notificando:5 };
+      const atual = mapa[job.status] || 0;
+      for (let i = 1; i <= 5; i++) {
+        document.getElementById(`e${i}`).className = 'etapa' + (i < atual ? ' feita' : i === atual ? ' ativa' : '');
+      }
+      return;
     }
 
     if (job.status === 'pronto') {
       clearInterval(polling);
-      document.getElementById('progresso').style.display = 'none';
-      document.getElementById('download-area').style.display = 'block';
+      mostrarTela('tela-pronto');
       document.getElementById('titulo-livro').textContent = job.titulo ? `"${job.titulo}"` : '';
       document.getElementById('btn-download').href = `/api/download/${jobId}`;
-    } else if (job.status === 'erro') {
-      clearInterval(polling);
-      mostrarErro(job.mensagem || job.erro || 'Erro desconhecido');
+      return;
     }
-  } catch(e) {
-    console.error(e);
-  }
-}
 
-function mostrarErro(msg) {
-  document.getElementById('progresso').style.display = 'none';
-  document.getElementById('erro-area').style.display = 'block';
-  document.getElementById('erro-area').textContent = '❌ ' + msg;
-  document.getElementById('reiniciar').style.display = 'block';
-  document.getElementById('btn-processar').disabled = false;
-}
-
-function reiniciar() {
-  clearInterval(polling);
-  document.getElementById('form-area').style.opacity = '1';
-  document.getElementById('progresso').style.display = 'none';
-  document.getElementById('download-area').style.display = 'none';
-  document.getElementById('erro-area').style.display = 'none';
-  document.getElementById('reiniciar').style.display = 'none';
-  document.getElementById('btn-processar').disabled = false;
+    if (job.status === 'erro') {
+      clearInterval(polling);
+      mostrarTela('tela-erro');
+      document.getElementById('erro-msg').textContent = job.mensagem || '❌ Erro. Entre em contato: (11) 93496-4127';
+    }
+  } catch(e) { console.error(e); }
 }
 </script>
 </body>
