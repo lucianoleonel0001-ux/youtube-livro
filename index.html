@@ -142,7 +142,7 @@ async function iniciar() {
   document.getElementById('progresso').style.display = 'block';
 
   try {
-    const resp = await fetch('/api/processar', {
+    const resp = await fetch('/api/pedido', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ youtubeUrl: url, nome, email, whatsapp })
@@ -150,7 +150,10 @@ async function iniciar() {
     const data = await resp.json();
     if (!data.jobId) throw new Error(data.erro || 'Erro ao iniciar');
     jobId = data.jobId;
-    polling = setInterval(verificarStatus, 3000);
+    document.getElementById('prog-msg').textContent = '⏳ Pedido recebido! Aguardando confirmação do pagamento...';
+    document.getElementById('prog-bar').style.width = '5%';
+    document.getElementById('prog-pct').textContent = 'Aguardando pagamento';
+    polling = setInterval(verificarStatus, 4000);
   } catch(e) {
     mostrarErro(e.message);
   }

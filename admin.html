@@ -231,6 +231,7 @@ function renderizar() {
 
   container.innerHTML = filtrados.map(([id, job]) => {
     const statusClass = {
+      aguardando_pagamento:'status-aguardando',
       iniciando:'status-processando', baixando:'status-processando',
       transcrevendo:'status-processando', gerando:'status-processando',
       diagramando:'status-processando', notificando:'status-processando',
@@ -238,10 +239,11 @@ function renderizar() {
     }[job.status] || 'status-aguardando';
 
     const statusLabel = {
+      aguardando_pagamento:'⏳ Aguardando Pagamento',
       iniciando:'Iniciando', baixando:'Baixando áudio',
       transcrevendo:'Transcrevendo', gerando:'Gerando livro',
       diagramando:'Diagramando', notificando:'Notificando',
-      pronto:'Pronto', erro:'Erro'
+      pronto:'✅ Pronto', erro:'❌ Erro'
     }[job.status] || job.status;
 
     const data = new Date(parseInt(id)).toLocaleString('pt-BR');
@@ -271,9 +273,10 @@ function renderizar() {
       ${job.status === 'erro' ? `<div style="margin-top:10px;font-size:13px;color:var(--red);">❌ ${job.mensagem || job.erro || 'Erro desconhecido'}</div>` : ''}
 
       <div class="pedido-acoes">
+        ${job.status === 'aguardando_pagamento' ? `<button class="btn-sm btn-gold" onclick="liberar('${id}')">✅ Confirmar Pagamento & Processar</button>` : ''}
         ${job.status === 'pronto' ? `<a href="/api/download/${id}" target="_blank"><button class="btn-sm btn-gold">📥 Baixar .docx</button></a>` : ''}
         ${job.status === 'pronto' ? `<button class="btn-sm btn-outline" onclick="reenviarNotif('${id}')">📲 Reenviar aviso</button>` : ''}
-        ${job.status === 'erro' ? `<button class="btn-sm btn-gold" onclick="reprocessar('${id}')">↻ Reprocessar</button>` : ''}
+        ${job.status === 'erro' ? `<button class="btn-sm btn-gold" onclick="liberar('${id}')">↻ Reprocessar</button>` : ''}
         <button class="btn-sm btn-red" onclick="excluir('${id}')">🗑 Excluir</button>
       </div>
     </div>`;
@@ -287,6 +290,14 @@ function filtrar(f, el) {
   renderizar();
 }
 
+async function liberar(id) {
+  const r = await fetch(`/api/admin/liberar/${id}`, { method: 'POST', headers: { 'x-admin-key': SENHA } });
+  const d = await r.json();
+  if (d.ok) notif('✅ Pagamento confirmado! Processando...');
+  else notif('❌ Erro: ' + (d.erro || 'desconhecido'));
+  carregarJobs();
+}
+
 async function processarManual() {
   const url = document.getElementById('m-url').value.trim();
   const nome = document.getElementById('m-nome').value.trim();
@@ -294,14 +305,14 @@ async function processarManual() {
   const whatsapp = document.getElementById('m-whats').value.trim();
   if (!url || !email) { notif('URL e e-mail são obrigatórios!'); return; }
 
-  const r = await fetch('/api/processar', {
+  const r = await fetch('/api/admin/processar', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-admin-key': SENHA },
     body: JSON.stringify({ youtubeUrl: url, nome, email, whatsapp })
   });
   const d = await r.json();
   if (d.jobId) {
-    notif('✅ Processamento iniciado! ID: ' + d.jobId);
+    notif('✅ Processamento iniciado!');
     document.getElementById('m-url').value = '';
     carregarJobs();
   } else {
