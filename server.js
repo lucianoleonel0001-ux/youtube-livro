@@ -68,7 +68,8 @@ async function processarVideo(jobId) {
     // ETAPA 1 — Baixar áudio
     atualizarJob(jobId, 'baixando', 10, '⏬ Baixando áudio do YouTube...');
     const audioPath = path.join(tmpDir, 'audio.mp3');
-    await execAsync(`yt-dlp -x --audio-format mp3 --audio-quality 0 -o "${audioPath.replace('.mp3','')}.%(ext)s" "${job.youtubeUrl}" 2>&1`);
+    const audioTemplate = path.join(tmpDir, 'audio.%(ext)s');
+    await execAsync(`yt-dlp -x --audio-format mp3 --audio-quality 0 -o '${audioTemplate}' '${job.youtubeUrl}' 2>&1`);
     // yt-dlp pode nomear diferente, encontrar o mp3
     const files = fs.readdirSync(tmpDir);
     const audioFile = files.find(f => f.endsWith('.mp3') || f.endsWith('.m4a') || f.endsWith('.webm') || f.endsWith('.opus'));
@@ -313,7 +314,28 @@ async function enviarWhatsapp(job) {
   // Em produção integrar com Z-API ou Evolution API
 }
 
-// ── INDEX ─────────────────────────────────────────────────────────────────
+// ── ROTAS ADMIN ───────────────────────────────────────────────────────────
+function adminAuth(req, res, next) {
+  const key = req.headers['x-admin-key'];
+  if (key !== (process.env.ADMIN_KEY || 'lucel2026')) return res.status(401).json({ erro: 'Não autorizado' });
+  next();
+}
+
+app.get('/api/admin/jobs', adminAuth, (req, res) => res.json(jobs));
+
+app.post('/api/admin/reenviar/:jobId', adminAuth, async (req, res) => {
+  const job = jobs[req.params.jobId];
+  if (!job) return res.status(404).json({ erro: 'Job não encontrado' });
+  await Promise.allSettled([enviarEmail(job), enviarWhatsapp(job)]);
+  res.json({ ok: true });
+});
+
+app.delete('/api/admin/excluir/:jobId', adminAuth, (req, res) => {
+  delete jobs[req.params.jobId];
+  res.json({ ok: true });
+});
+
+
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
 const PORT = process.env.PORT || 3000;

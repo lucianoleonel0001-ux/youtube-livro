@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin | Lucel Digital</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Lato:wght@300;400;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --gold:#C9A84C; --gold-light:#E8C96A;
+  --black:#090909; --dark:#111; --dark2:#181818; --dark3:#222;
+  --white:#F5F0E8; --gray:#888; --green:#4CAF50; --red:#e53935;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--black);color:var(--white);font-family:'Lato',sans-serif;min-height:100vh;}
+
+/* LOGIN */
+#login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.login-card{background:var(--dark2);border:1px solid #2a2a2a;border-top:4px solid var(--gold);border-radius:16px;padding:48px 44px;width:100%;max-width:400px;text-align:center;}
+.logo{font-family:'Bebas Neue';font-size:28px;color:var(--gold);letter-spacing:2px;margin-bottom:8px;}
+.login-card h2{font-family:'Bebas Neue';font-size:32px;margin-bottom:32px;}
+
+/* ADMIN */
+#admin-screen{display:none;}
+nav{background:var(--dark);border-bottom:1px solid #222;padding:16px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.nav-logo{font-family:'Bebas Neue';font-size:22px;color:var(--gold);letter-spacing:2px;}
+.nav-right{display:flex;align-items:center;gap:12px;}
+.nav-badge{background:rgba(201,168,76,0.1);border:1px solid rgba(201,168,76,0.3);color:var(--gold);font-size:11px;letter-spacing:2px;padding:4px 12px;border-radius:100px;text-transform:uppercase;}
+
+.main{padding:32px;max-width:1100px;margin:0 auto;}
+
+/* STATS */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:16px;margin-bottom:32px;}
+.stat{background:var(--dark2);border:1px solid #252525;border-radius:10px;padding:20px 24px;}
+.stat-num{font-family:'Bebas Neue';font-size:42px;color:var(--gold);line-height:1;}
+.stat-label{font-size:12px;color:var(--gray);letter-spacing:1px;text-transform:uppercase;margin-top:4px;}
+
+/* FILTROS */
+.section-title{font-family:'Bebas Neue';font-size:28px;letter-spacing:1px;margin-bottom:16px;}
+.filtros{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap;}
+.filtro{padding:8px 18px;border-radius:100px;font-size:12px;font-weight:700;border:1px solid #2a2a2a;background:var(--dark2);color:var(--gray);cursor:pointer;transition:all .2s;letter-spacing:1px;text-transform:uppercase;}
+.filtro.ativo{background:var(--gold);color:var(--black);border-color:var(--gold);}
+
+/* PEDIDOS */
+.pedidos-lista{display:flex;flex-direction:column;gap:12px;}
+.pedido{background:var(--dark2);border:1px solid #252525;border-radius:10px;padding:20px 24px;}
+.pedido-header{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:12px;}
+.pedido-nome{font-weight:700;font-size:16px;margin-bottom:3px;}
+.pedido-contato{font-size:13px;color:var(--gray);margin-bottom:3px;}
+.pedido-url{font-size:12px;color:rgba(201,168,76,0.7);word-break:break-all;margin-bottom:6px;}
+.pedido-titulo{font-size:13px;color:var(--gold);font-style:italic;margin-bottom:6px;}
+.pedido-data{font-size:11px;color:#555;}
+.pedido-status{display:inline-block;padding:4px 12px;border-radius:100px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;}
+.status-aguardando{background:rgba(255,165,0,0.12);color:orange;border:1px solid rgba(255,165,0,0.3);}
+.status-processando{background:rgba(100,149,237,0.12);color:cornflowerblue;border:1px solid rgba(100,149,237,0.3);}
+.status-pronto{background:rgba(76,175,80,0.12);color:var(--green);border:1px solid rgba(76,175,80,0.3);}
+.status-erro{background:rgba(229,57,53,0.12);color:var(--red);border:1px solid rgba(229,57,53,0.3);}
+
+.pedido-acoes{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:14px;border-top:1px solid #252525;}
+.btn-sm{padding:8px 16px;border-radius:6px;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;border:none;cursor:pointer;font-family:'Lato',sans-serif;transition:all .2s;white-space:nowrap;}
+.btn-gold{background:var(--gold);color:var(--black);}
+.btn-gold:hover{background:var(--gold-light);}
+.btn-outline{background:transparent;color:var(--gray);border:1px solid #333;}
+.btn-outline:hover{border-color:var(--gray);color:var(--white);}
+.btn-red{background:rgba(229,57,53,0.12);color:var(--red);border:1px solid rgba(229,57,53,0.3);}
+.btn-red:hover{background:var(--red);color:var(--white);}
+
+/* PROGRESSO */
+.prog-wrap{margin-top:10px;}
+.prog-msg{font-size:13px;color:var(--white);margin-bottom:6px;}
+.prog-bar-bg{background:#222;border-radius:100px;height:6px;overflow:hidden;}
+.prog-bar{height:6px;background:linear-gradient(to right,var(--gold-light),var(--gold));border-radius:100px;transition:width .5s;}
+.prog-pct{font-size:11px;color:var(--gray);text-align:right;margin-top:4px;}
+
+.vazio{text-align:center;padding:60px 20px;color:var(--gray);font-size:15px;}
+
+/* INPUTS */
+input,select{background:var(--dark);border:1px solid #2a2a2a;border-radius:6px;padding:12px 14px;color:var(--white);font-size:14px;font-family:'Lato',sans-serif;outline:none;transition:border-color .2s;width:100%;margin-bottom:16px;}
+input:focus,select:focus{border-color:var(--gold);}
+input::placeholder{color:#444;}
+label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);font-weight:700;display:block;margin-bottom:6px;}
+
+.btn-main{width:100%;background:var(--gold);color:var(--black);font-weight:900;font-size:14px;letter-spacing:2px;text-transform:uppercase;padding:16px;border-radius:6px;border:none;cursor:pointer;font-family:'Lato',sans-serif;transition:all .2s;}
+.btn-main:hover{background:var(--gold-light);}
+
+/* NOVO PEDIDO MANUAL */
+.card-section{background:var(--dark2);border:1px solid #252525;border-radius:10px;padding:28px;margin-bottom:32px;}
+.card-section-title{font-family:'Bebas Neue';font-size:22px;color:var(--gold);margin-bottom:20px;letter-spacing:1px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+
+/* NOTIF */
+#notif{position:fixed;bottom:24px;right:24px;background:var(--gold);color:var(--black);font-weight:700;font-size:14px;padding:14px 24px;border-radius:8px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999;}
+#notif.show{opacity:1;}
+
+@media(max-width:600px){
+  .main{padding:16px;}
+  nav{padding:12px 16px;}
+  .pedido-header{flex-direction:column;}
+  .grid2{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="logo">LUCEL DIGITAL</div>
+    <h2>Painel Admin</h2>
+    <label>Senha</label>
+    <input type="password" id="senha-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')login()"/>
+    <button class="btn-main" onclick="login()">Entrar →</button>
+  </div>
+</div>
+
+<!-- ADMIN -->
+<div id="admin-screen">
+  <nav>
+    <span class="nav-logo">LUCEL DIGITAL — Admin</span>
+    <div class="nav-right">
+      <span class="nav-badge" id="nav-count">carregando...</span>
+      <button class="btn-sm btn-outline" onclick="carregarJobs()">↻ Atualizar</button>
+    </div>
+  </nav>
+
+  <div class="main">
+
+    <!-- STATS -->
+    <div class="stats">
+      <div class="stat"><div class="stat-num" id="st-total">0</div><div class="stat-label">Total</div></div>
+      <div class="stat"><div class="stat-num" id="st-processando">0</div><div class="stat-label">Processando</div></div>
+      <div class="stat"><div class="stat-num" id="st-pronto">0</div><div class="stat-label">Prontos</div></div>
+      <div class="stat"><div class="stat-num" id="st-erro">0</div><div class="stat-label">Com erro</div></div>
+    </div>
+
+    <!-- NOVO PEDIDO MANUAL -->
+    <div class="card-section">
+      <div class="card-section-title">➕ Processar Vídeo Manualmente</div>
+      <div class="grid2">
+        <div>
+          <label>Link do YouTube</label>
+          <input type="url" id="m-url" placeholder="https://www.youtube.com/watch?v=..."/>
+        </div>
+        <div>
+          <label>Nome do Autor</label>
+          <input type="text" id="m-nome" placeholder="Ex: Pastor João Silva"/>
+        </div>
+        <div>
+          <label>E-mail do Cliente</label>
+          <input type="email" id="m-email" placeholder="cliente@gmail.com"/>
+        </div>
+        <div>
+          <label>WhatsApp do Cliente</label>
+          <input type="text" id="m-whats" placeholder="11987654321"/>
+        </div>
+      </div>
+      <button class="btn-main" style="max-width:300px" onclick="processarManual()">▶ Processar Agora →</button>
+    </div>
+
+    <!-- LISTA DE JOBS -->
+    <div class="section-title">Pedidos</div>
+    <div class="filtros">
+      <div class="filtro ativo" onclick="filtrar('todos',this)">Todos</div>
+      <div class="filtro" onclick="filtrar('processando',this)">Processando</div>
+      <div class="filtro" onclick="filtrar('pronto',this)">Prontos</div>
+      <div class="filtro" onclick="filtrar('erro',this)">Erros</div>
+    </div>
+    <div class="pedidos-lista" id="pedidos-lista">
+      <div class="vazio">Carregando...</div>
+    </div>
+
+  </div>
+</div>
+
+<div id="notif"></div>
+
+<script>
+let SENHA = '';
+let filtroAtual = 'todos';
+let jobs = {};
+let polling = null;
+
+function login() {
+  const s = document.getElementById('senha-input').value.trim();
+  if (!s) return;
+  SENHA = s;
+  // Testar senha
+  fetch('/api/admin/jobs', { headers: { 'x-admin-key': SENHA } })
+    .then(r => {
+      if (r.status === 401) { alert('Senha incorreta!'); return; }
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('admin-screen').style.display = 'block';
+      carregarJobs();
+      polling = setInterval(carregarJobs, 5000);
+    });
+}
+
+async function carregarJobs() {
+  try {
+    const r = await fetch('/api/admin/jobs', { headers: { 'x-admin-key': SENHA } });
+    if (!r.ok) return;
+    jobs = await r.json();
+    renderizar();
+  } catch(e) { console.error(e); }
+}
+
+function renderizar() {
+  const lista = Object.entries(jobs);
+
+  // Stats
+  document.getElementById('st-total').textContent = lista.length;
+  document.getElementById('st-processando').textContent = lista.filter(([,j]) => !['pronto','erro'].includes(j.status)).length;
+  document.getElementById('st-pronto').textContent = lista.filter(([,j]) => j.status === 'pronto').length;
+  document.getElementById('st-erro').textContent = lista.filter(([,j]) => j.status === 'erro').length;
+  document.getElementById('nav-count').textContent = lista.length + ' pedido' + (lista.length !== 1 ? 's' : '');
+
+  // Filtrar
+  let filtrados = lista;
+  if (filtroAtual === 'processando') filtrados = lista.filter(([,j]) => !['pronto','erro'].includes(j.status));
+  else if (filtroAtual === 'pronto') filtrados = lista.filter(([,j]) => j.status === 'pronto');
+  else if (filtroAtual === 'erro') filtrados = lista.filter(([,j]) => j.status === 'erro');
+
+  // Ordenar mais recentes primeiro
+  filtrados.sort((a,b) => parseInt(b[0]) - parseInt(a[0]));
+
+  const container = document.getElementById('pedidos-lista');
+  if (!filtrados.length) {
+    container.innerHTML = '<div class="vazio">Nenhum pedido encontrado.</div>';
+    return;
+  }
+
+  container.innerHTML = filtrados.map(([id, job]) => {
+    const statusClass = {
+      iniciando:'status-processando', baixando:'status-processando',
+      transcrevendo:'status-processando', gerando:'status-processando',
+      diagramando:'status-processando', notificando:'status-processando',
+      pronto:'status-pronto', erro:'status-erro'
+    }[job.status] || 'status-aguardando';
+
+    const statusLabel = {
+      iniciando:'Iniciando', baixando:'Baixando áudio',
+      transcrevendo:'Transcrevendo', gerando:'Gerando livro',
+      diagramando:'Diagramando', notificando:'Notificando',
+      pronto:'Pronto', erro:'Erro'
+    }[job.status] || job.status;
+
+    const data = new Date(parseInt(id)).toLocaleString('pt-BR');
+    const emAndamento = !['pronto','erro'].includes(job.status);
+
+    return `
+    <div class="pedido" id="pedido-${id}">
+      <div class="pedido-header">
+        <div>
+          <div class="pedido-nome">${job.nome || 'Sem nome'}</div>
+          <div class="pedido-contato">📧 ${job.email || '-'} &nbsp;|&nbsp; 📱 ${job.whatsapp || '-'}</div>
+          <div class="pedido-url">▶ ${job.youtubeUrl || '-'}</div>
+          ${job.titulo ? `<div class="pedido-titulo">📖 "${job.titulo}"</div>` : ''}
+          <div class="pedido-data">⏱ ${data}</div>
+        </div>
+        <span class="pedido-status ${statusClass}">${statusLabel}</span>
+      </div>
+
+      ${emAndamento ? `
+        <div class="prog-wrap">
+          <div class="prog-msg">${job.mensagem || '...'}</div>
+          <div class="prog-bar-bg"><div class="prog-bar" style="width:${job.progresso||0}%"></div></div>
+          <div class="prog-pct">${job.progresso||0}%</div>
+        </div>
+      ` : ''}
+
+      ${job.status === 'erro' ? `<div style="margin-top:10px;font-size:13px;color:var(--red);">❌ ${job.mensagem || job.erro || 'Erro desconhecido'}</div>` : ''}
+
+      <div class="pedido-acoes">
+        ${job.status === 'pronto' ? `<a href="/api/download/${id}" target="_blank"><button class="btn-sm btn-gold">📥 Baixar .docx</button></a>` : ''}
+        ${job.status === 'pronto' ? `<button class="btn-sm btn-outline" onclick="reenviarNotif('${id}')">📲 Reenviar aviso</button>` : ''}
+        ${job.status === 'erro' ? `<button class="btn-sm btn-gold" onclick="reprocessar('${id}')">↻ Reprocessar</button>` : ''}
+        <button class="btn-sm btn-red" onclick="excluir('${id}')">🗑 Excluir</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filtrar(f, el) {
+  filtroAtual = f;
+  document.querySelectorAll('.filtro').forEach(e => e.classList.remove('ativo'));
+  el.classList.add('ativo');
+  renderizar();
+}
+
+async function processarManual() {
+  const url = document.getElementById('m-url').value.trim();
+  const nome = document.getElementById('m-nome').value.trim();
+  const email = document.getElementById('m-email').value.trim();
+  const whatsapp = document.getElementById('m-whats').value.trim();
+  if (!url || !email) { notif('URL e e-mail são obrigatórios!'); return; }
+
+  const r = await fetch('/api/processar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ youtubeUrl: url, nome, email, whatsapp })
+  });
+  const d = await r.json();
+  if (d.jobId) {
+    notif('✅ Processamento iniciado! ID: ' + d.jobId);
+    document.getElementById('m-url').value = '';
+    carregarJobs();
+  } else {
+    notif('❌ Erro: ' + (d.erro || 'desconhecido'));
+  }
+}
+
+async function reenviarNotif(id) {
+  await fetch(`/api/admin/reenviar/${id}`, { method: 'POST', headers: { 'x-admin-key': SENHA } });
+  notif('📲 Notificação reenviada!');
+}
+
+async function reprocessar(id) {
+  const job = jobs[id];
+  if (!job) return;
+  await fetch('/api/processar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ youtubeUrl: job.youtubeUrl, nome: job.nome, email: job.email, whatsapp: job.whatsapp })
+  });
+  notif('↻ Reprocessando...');
+  carregarJobs();
+}
+
+async function excluir(id) {
+  if (!confirm('Excluir este pedido?')) return;
+  await fetch(`/api/admin/excluir/${id}`, { method: 'DELETE', headers: { 'x-admin-key': SENHA } });
+  notif('🗑 Pedido excluído');
+  carregarJobs();
+}
+
+function notif(msg) {
+  const el = document.getElementById('notif');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
