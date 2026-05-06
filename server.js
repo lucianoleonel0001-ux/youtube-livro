@@ -110,16 +110,40 @@ app.post('/api/admin/upload/:jobId', adminAuth, upload.single('audio'), async (r
   job.status = 'iniciando';
   job.progresso = 0;
   job.mensagem = 'Iniciando processamento...';
-  job.audioPath = req.file.path; // caminho do MP3 já no servidor
-  res.json({ ok: true });
 
-  // Avisar cliente que iniciou
-  await avisarInicio(job, req.params.jobId).catch(() => {});
+  try {
+    // Fazer upload para AssemblyAI AGORA enquanto arquivo existe
+    atualizar(req.params.jobId, 'transcrevendo', 20, '⏫ Enviando áudio para transcrição...');
+    const ASSEMBLY_KEY = process.env.ASSEMBLYAI_API_KEY || '';
+    const fileStream = fs.createReadStream(req.file.path);
+    const uploadResp = await axios.post('https://api.assemblyai.com/v2/upload', fileStream, {
+      headers: { 'authorization': ASSEMBLY_KEY, 'content-type': 'application/octet-stream' },
+      maxBodyLength: Infinity,
+      timeout: 120000
+    });
+    const audioUrl = uploadResp.data.upload_url;
+    if (!audioUrl) throw new Error('Falha no upload para AssemblyAI');
 
-  processarComAudio(req.params.jobId).catch(err => {
+    // Guardar URL do áudio no job e continuar processamento em background
+    job.assemblyAudioUrl = audioUrl;
+    try { fs.unlinkSync(req.file.path); } catch(e) {} // apagar arquivo local
+
+    res.json({ ok: true });
+
+    // Avisar cliente
+    await avisarInicio(job, req.params.jobId).catch(() => {});
+
+    // Continuar processamento em background
+    processarComUrl(req.params.jobId).catch(err => {
+      jobs[req.params.jobId].status = 'erro';
+      jobs[req.params.jobId].mensagem = '❌ ' + err.message;
+    });
+
+  } catch(err) {
     jobs[req.params.jobId].status = 'erro';
     jobs[req.params.jobId].mensagem = '❌ ' + err.message;
-  });
+    res.status(500).json({ erro: err.message });
+  }
 });
 
 
@@ -196,7 +220,63 @@ async function processarVideo(jobId) {
   }
 }
 
-// ── PROCESSAR COM ÁUDIO JÁ ENVIADO ───────────────────────────────────────
+// ── PROCESSAR COM URL JÁ ENVIADA PARA ASSEMBLYAI ─────────────────────────
+async function processarComUrl(jobId) {
+  const job = jobs[jobId];
+  const tmpDir = `/tmp/job_${jobId}`;
+  fs.mkdirSync(tmpDir, { recursive: true });
+
+  try {
+    const ASSEMBLY_KEY = process.env.ASSEMBLYAI_API_KEY || '';
+    const headers = { 'authorization': ASSEMBLY_KEY };
+
+    // Submeter transcrição com URL já enviada
+    atualizar(jobId, 'transcrevendo', 35, '🎙️ Transcrevendo o áudio...');
+    const submit = await axios.post('https://api.assemblyai.com/v2/transcript', {
+      audio_url: job.assemblyAudioUrl,
+      language_code: 'pt'
+    }, { headers: { ...headers, 'content-type': 'application/json' }, timeout: 30000 });
+
+    const transcriptId = submit.data.id;
+    if (!transcriptId) throw new Error('AssemblyAI não retornou ID.');
+
+    // Aguardar conclusão
+    let transcricao = '';
+    for (let i = 0; i < 120; i++) {
+      await new Promise(r => setTimeout(r, 5000));
+      const poll = await axios.get(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, { headers, timeout: 15000 });
+      if (poll.data.status === 'completed') { transcricao = poll.data.text; break; }
+      if (poll.data.status === 'error') throw new Error('AssemblyAI: ' + poll.data.error);
+    }
+    if (!transcricao || transcricao.length < 50) throw new Error('Transcrição muito curta ou falhou.');
+
+    // Gerar livro
+    atualizar(jobId, 'gerando', 60, '🤖 Criando os 12 capítulos com IA...');
+    const livro = await gerarLivro(transcricao, job.nome);
+
+    // Diagramar
+    atualizar(jobId, 'diagramando', 82, '📐 Diagramando o livro...');
+    const docxPath = path.join(tmpDir, 'livro.docx');
+    await gerarDocx(livro, docxPath);
+
+    const nomeArquivo = livro.titulo.replace(/[^a-zA-Z0-9À-ú ]/g, '_').substring(0, 40) + '.docx';
+    job.docxPath = docxPath;
+    job.nomeArquivo = nomeArquivo;
+    job.titulo = livro.titulo;
+
+    // Notificar
+    atualizar(jobId, 'notificando', 93, '📲 Enviando notificações...');
+    await Promise.allSettled([enviarEmail(job, jobId), enviarWhatsapp(job, jobId)]);
+
+    atualizar(jobId, 'pronto', 100, '✅ Livro pronto para download!');
+
+  } catch(err) {
+    jobs[jobId].status = 'erro';
+    jobs[jobId].mensagem = '❌ ' + err.message;
+    throw err;
+  }
+}
+
 async function processarComAudio(jobId) {
   const job = jobs[jobId];
   const tmpDir = `/tmp/job_${jobId}`;
