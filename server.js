@@ -122,15 +122,27 @@ async function processarVideo(jobId) {
   fs.mkdirSync(tmpDir, { recursive: true });
 
   try {
-    // ETAPA 1 — Enviar link para AssemblyAI transcrever
-    atualizar(jobId, 'baixando', 10, '🔗 Enviando vídeo para transcrição...');
+    // ETAPA 1 — Baixar áudio
+    atualizar(jobId, 'baixando', 10, '⏬ Baixando áudio do YouTube...');
     const videoId = extrairVideoId(job.youtubeUrl);
     if (!videoId) throw new Error('Link do YouTube inválido.');
-    const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    const audioPath = path.join(tmpDir, 'audio.mp3');
 
-    // ETAPA 2 — Transcrever com AssemblyAI
+    try {
+      const nodePath = path.dirname(process.execPath);
+      await execAsync(
+        `yt-dlp -x --audio-format mp3 --audio-quality 5 -o "${audioPath}" "https://www.youtube.com/watch?v=${videoId}"`,
+        { env: { ...process.env, PATH: `${nodePath}:${process.env.PATH}` } }
+      );
+    } catch(e) {
+      throw new Error('Falha ao baixar: ' + (e.stderr || e.message).substring(0, 200));
+    }
+
+    if (!fs.existsSync(audioPath)) throw new Error('Arquivo de áudio não encontrado.');
+
+    // ETAPA 2 — Upload para AssemblyAI e transcrever
     atualizar(jobId, 'transcrevendo', 30, '🎙️ Transcrevendo o áudio...');
-    const transcricao = await transcreverAssemblyAI(ytUrl);
+    const transcricao = await transcreverAssemblyAI(audioPath);
     if (!transcricao || transcricao.length < 50) throw new Error('Transcrição muito curta ou falhou.');
 
     // ETAPA 3 — Gerar livro
@@ -176,28 +188,39 @@ function extrairVideoId(url) {
 }
 
 // ── TRANSCREVER COM ASSEMBLYAI ────────────────────────────────────────────
-async function transcreverAssemblyAI(youtubeUrl) {
+async function transcreverAssemblyAI(audioPath) {
   const ASSEMBLY_KEY = process.env.ASSEMBLYAI_API_KEY || '';
-  const headers = { 'authorization': ASSEMBLY_KEY, 'content-type': 'application/json' };
+  const headers = { 'authorization': ASSEMBLY_KEY };
 
-  // Submeter transcrição
+  // Passo 1 — Upload do arquivo
+  const fileStream = fs.createReadStream(audioPath);
+  const uploadResp = await axios.post('https://api.assemblyai.com/v2/upload', fileStream, {
+    headers: { ...headers, 'content-type': 'application/octet-stream' },
+    maxBodyLength: Infinity,
+    timeout: 120000
+  });
+  const audioUrl = uploadResp.data.upload_url;
+  if (!audioUrl) throw new Error('AssemblyAI upload falhou.');
+
+  // Passo 2 — Submeter transcrição
   const submit = await axios.post('https://api.assemblyai.com/v2/transcript', {
-    audio_url: youtubeUrl,
+    audio_url: audioUrl,
     language_code: 'pt'
-  }, { headers, timeout: 30000 });
+  }, { headers: { ...headers, 'content-type': 'application/json' }, timeout: 30000 });
 
   const transcriptId = submit.data.id;
-  if (!transcriptId) throw new Error('AssemblyAI não retornou ID de transcrição.');
+  if (!transcriptId) throw new Error('AssemblyAI não retornou ID.');
 
-  // Aguardar conclusão (polling)
+  // Passo 3 — Aguardar conclusão
   for (let i = 0; i < 60; i++) {
     await new Promise(r => setTimeout(r, 5000));
-    const poll = await axios.get(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, { headers, timeout: 15000 });
-    const status = poll.data.status;
-    if (status === 'completed') return poll.data.text;
-    if (status === 'error') throw new Error('AssemblyAI erro: ' + poll.data.error);
+    const poll = await axios.get(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, {
+      headers, timeout: 15000
+    });
+    if (poll.data.status === 'completed') return poll.data.text;
+    if (poll.data.status === 'error') throw new Error('AssemblyAI: ' + poll.data.error);
   }
-  throw new Error('Transcrição demorou demais (timeout).');
+  throw new Error('Transcrição demorou demais.');
 }
 
 
