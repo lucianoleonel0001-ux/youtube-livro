@@ -121,6 +121,7 @@ app.post('/api/admin/upload/:jobId', adminAuth, upload.single('audio'), async (r
       maxBodyLength: Infinity,
       timeout: 120000
     });
+    console.log('AssemblyAI upload resp:', JSON.stringify(uploadResp.data));
     const audioUrl = uploadResp.data.upload_url;
     if (!audioUrl) throw new Error('Falha no upload para AssemblyAI');
 
@@ -140,9 +141,10 @@ app.post('/api/admin/upload/:jobId', adminAuth, upload.single('audio'), async (r
     });
 
   } catch(err) {
+    const msg = err.response?.data?.error || err.response?.data?.message || err.message;
     jobs[req.params.jobId].status = 'erro';
-    jobs[req.params.jobId].mensagem = '❌ ' + err.message;
-    res.status(500).json({ erro: err.message });
+    jobs[req.params.jobId].mensagem = '❌ AssemblyAI: ' + msg;
+    res.status(500).json({ erro: msg });
   }
 });
 
