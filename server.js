@@ -127,9 +127,9 @@ async function processarVideo(jobId) {
     const audioTemplate = path.join(tmpDir, 'audio.%(ext)s');
 
     try {
-      await execAsync(`yt-dlp -x --audio-format mp3 --audio-quality 0 -o "${audioTemplate}" "${job.youtubeUrl}"`);
+      await execAsync(`python3 -m yt_dlp -x --audio-format mp3 --audio-quality 0 --no-check-certificate -o "${audioTemplate}" "${job.youtubeUrl}"`);
     } catch(e) {
-      throw new Error('Falha ao baixar vídeo: ' + (e.stderr || e.message).substring(0, 200));
+      throw new Error('Falha ao baixar vídeo: ' + (e.stderr || e.message).substring(0, 300));
     }
 
     const files = fs.readdirSync(tmpDir);

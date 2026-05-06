@@ -83,11 +83,6 @@ label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--gol
 .btn-main{width:100%;background:var(--gold);color:var(--black);font-weight:900;font-size:14px;letter-spacing:2px;text-transform:uppercase;padding:16px;border-radius:6px;border:none;cursor:pointer;font-family:'Lato',sans-serif;transition:all .2s;}
 .btn-main:hover{background:var(--gold-light);}
 
-/* NOVO PEDIDO MANUAL */
-.card-section{background:var(--dark2);border:1px solid #252525;border-radius:10px;padding:28px;margin-bottom:32px;}
-.card-section-title{font-family:'Bebas Neue';font-size:22px;color:var(--gold);margin-bottom:20px;letter-spacing:1px;}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
-
 /* NOTIF */
 #notif{position:fixed;bottom:24px;right:24px;background:var(--gold);color:var(--black);font-weight:700;font-size:14px;padding:14px 24px;border-radius:8px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:999;}
 #notif.show{opacity:1;}
@@ -131,30 +126,6 @@ label{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--gol
       <div class="stat"><div class="stat-num" id="st-processando">0</div><div class="stat-label">Processando</div></div>
       <div class="stat"><div class="stat-num" id="st-pronto">0</div><div class="stat-label">Prontos</div></div>
       <div class="stat"><div class="stat-num" id="st-erro">0</div><div class="stat-label">Com erro</div></div>
-    </div>
-
-    <!-- NOVO PEDIDO MANUAL -->
-    <div class="card-section">
-      <div class="card-section-title">➕ Processar Vídeo Manualmente</div>
-      <div class="grid2">
-        <div>
-          <label>Link do YouTube</label>
-          <input type="url" id="m-url" placeholder="https://www.youtube.com/watch?v=..."/>
-        </div>
-        <div>
-          <label>Nome do Autor</label>
-          <input type="text" id="m-nome" placeholder="Ex: Pastor João Silva"/>
-        </div>
-        <div>
-          <label>E-mail do Cliente</label>
-          <input type="email" id="m-email" placeholder="cliente@gmail.com"/>
-        </div>
-        <div>
-          <label>WhatsApp do Cliente</label>
-          <input type="text" id="m-whats" placeholder="11987654321"/>
-        </div>
-      </div>
-      <button class="btn-main" style="max-width:300px" onclick="processarManual()">▶ Processar Agora →</button>
     </div>
 
     <!-- LISTA DE JOBS -->
@@ -296,28 +267,6 @@ async function liberar(id) {
   if (d.ok) notif('✅ Pagamento confirmado! Processando...');
   else notif('❌ Erro: ' + (d.erro || 'desconhecido'));
   carregarJobs();
-}
-
-async function processarManual() {
-  const url = document.getElementById('m-url').value.trim();
-  const nome = document.getElementById('m-nome').value.trim();
-  const email = document.getElementById('m-email').value.trim();
-  const whatsapp = document.getElementById('m-whats').value.trim();
-  if (!url || !email) { notif('URL e e-mail são obrigatórios!'); return; }
-
-  const r = await fetch('/api/admin/processar', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-admin-key': SENHA },
-    body: JSON.stringify({ youtubeUrl: url, nome, email, whatsapp })
-  });
-  const d = await r.json();
-  if (d.jobId) {
-    notif('✅ Processamento iniciado!');
-    document.getElementById('m-url').value = '';
-    carregarJobs();
-  } else {
-    notif('❌ Erro: ' + (d.erro || 'desconhecido'));
-  }
 }
 
 async function reenviarNotif(id) {
