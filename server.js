@@ -14,7 +14,6 @@ const {
 
 const app = express();
 app.use(express.json());
-app.use(express.static(__dirname));
 
 const OPENAI_KEY    = process.env.OPENAI_API_KEY  || '';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
@@ -373,7 +372,8 @@ async function notificarAdmin(jobId) {
   });
 }
 
-// ── INDEX ─────────────────────────────────────────────────────────────────
+// ── ARQUIVOS ESTÁTICOS (depois das rotas de API) ──────────────────────────
+app.use(express.static(__dirname));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'landing.html')));
 app.get('/app', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
