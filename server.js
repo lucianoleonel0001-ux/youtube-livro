@@ -130,7 +130,7 @@ async function processarVideo(jobId) {
 
     try {
       await execAsync(
-        `yt-dlp --js-runtimes node -x --audio-format mp3 --audio-quality 5 -o "${audioPath}" "https://www.youtube.com/watch?v=${videoId}"`
+        `yt-dlp --js-runtimes node --extractor-args "youtube:player-client=android,web" -x --audio-format mp3 --audio-quality 5 -o "${audioPath}" "https://www.youtube.com/watch?v=${videoId}"`
       );
     } catch(e) {
       throw new Error('Falha ao baixar: ' + (e.stderr || e.message).substring(0, 200));
