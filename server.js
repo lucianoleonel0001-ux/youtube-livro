@@ -129,10 +129,10 @@ async function processarVideo(jobId) {
     const audioPath = path.join(tmpDir, 'audio.mp3');
 
     try {
-      const nodePath = path.dirname(process.execPath);
+      const nodeBin = process.execPath;
       await execAsync(
-        `yt-dlp -x --audio-format mp3 --audio-quality 5 -o "${audioPath}" "https://www.youtube.com/watch?v=${videoId}"`,
-        { env: { ...process.env, PATH: `${nodePath}:${process.env.PATH}` } }
+        `yt-dlp --js-runtimes "nodejs:${nodeBin}" -x --audio-format mp3 --audio-quality 5 -o "${audioPath}" "https://www.youtube.com/watch?v=${videoId}"`,
+        { env: { ...process.env } }
       );
     } catch(e) {
       throw new Error('Falha ao baixar: ' + (e.stderr || e.message).substring(0, 200));
