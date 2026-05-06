@@ -62,6 +62,9 @@ app.post('/api/admin/liberar/:jobId', adminAuth, async (req, res) => {
   job.mensagem = 'Iniciando processamento...';
   res.json({ ok: true });
 
+  // Avisar cliente que o serviço deu início
+  await avisarInicio(job, req.params.jobId).catch(() => {});
+
   processarVideo(req.params.jobId).catch(err => {
     jobs[req.params.jobId].status = 'erro';
     jobs[req.params.jobId].mensagem = '❌ ' + err.message;
@@ -305,7 +308,34 @@ async function enviarWhatsapp(job, jobId) {
   console.log('WhatsApp link gerado:', link);
 }
 
-// ── NOTIFICAR ADMIN ───────────────────────────────────────────────────────
+// ── AVISAR INÍCIO ─────────────────────────────────────────────────────────
+async function avisarInicio(job, jobId) {
+  // Email
+  if (EMAIL_PASS && job.email) {
+    const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: EMAIL_USER, pass: EMAIL_PASS } });
+    await transporter.sendMail({
+      from: `Lucel Digital <${EMAIL_USER}>`,
+      to: job.email,
+      subject: `🚀 Seu livro está sendo gerado — Lucel Digital`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#111;color:#F5F0E8;padding:40px;border-radius:12px;">
+        <h1 style="color:#C9A84C;">Lucel Digital</h1>
+        <h2>Seu livro está sendo gerado! 🚀</h2>
+        <p>Olá, ${job.nome || 'autor'}!<br><br>
+        Confirmamos seu pagamento e o processamento do seu livro <strong>deu início agora</strong>.<br><br>
+        Em breve você receberá outro e-mail com o link para download do seu livro .docx.</p>
+        <p style="font-size:12px;color:#888;margin-top:32px;">Lucel Digital · graficalucel@gmail.com · (11) 93496-4127</p>
+      </div>`
+    });
+  }
+  // WhatsApp
+  if (job.whatsapp) {
+    const num = job.whatsapp.replace(/\D/g, '');
+    const msg = `✅ *Olá, ${job.nome || 'autor'}!*\n\nConfirmamos seu pagamento! Seu livro está sendo gerado agora. 🚀\n\nEm breve você receberá o arquivo .docx por aqui e por e-mail.\n\n_Lucel Digital_`;
+    console.log('WhatsApp início:', `https://wa.me/${num}?text=${encodeURIComponent(msg)}`);
+  }
+}
+
+
 async function notificarAdmin(jobId) {
   if (!EMAIL_PASS) return;
   const job = jobs[jobId];
