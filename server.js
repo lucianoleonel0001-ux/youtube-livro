@@ -321,13 +321,15 @@ async function notificarAdmin(jobId) {
       <b>WhatsApp:</b> ${job.whatsapp || '-'}<br>
       <b>Vídeo:</b> ${job.youtubeUrl}</p>
       <p>Após confirmar o pagamento de R$ 49,90, acesse o admin para liberar o processamento:</p>
-      <a href="${BASE_URL}/admin.html" style="display:inline-block;background:#C9A84C;color:#000;font-weight:bold;padding:14px 32px;border-radius:6px;text-decoration:none;">Abrir Admin →</a>
+      <a href="${BASE_URL}/admin" style="display:inline-block;background:#C9A84C;color:#000;font-weight:bold;padding:14px 32px;border-radius:6px;text-decoration:none;">Abrir Admin →</a>
     </div>`
   });
 }
 
 // ── INDEX ─────────────────────────────────────────────────────────────────
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'landing.html')));
+app.get('/app', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Lucel Digital rodando na porta ${PORT}`));
