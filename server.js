@@ -8,14 +8,15 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
 const multer = require('multer');
-const upload = multer({ dest: '/tmp/uploads/' });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } }); // 500MB
 const {
   Document, Packer, Paragraph, TextRun,
   AlignmentType, PageBreak, TabStopPosition, TabStopType, Leader
 } = require('docx');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 const OPENAI_KEY    = process.env.OPENAI_API_KEY  || '';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
@@ -101,7 +102,18 @@ app.get('/api/download/:jobId', (req, res) => {
   res.download(job.docxPath, job.nomeArquivo || 'livro.docx');
 });
 
-// ── UPLOAD MP3 + PROCESSAR ────────────────────────────────────────────────
+// ── CONFIRMAR PAGAMENTO ───────────────────────────────────────────────────
+app.post('/api/admin/confirmar/:jobId', adminAuth, async (req, res) => {
+  const job = jobs[req.params.jobId];
+  if (!job) return res.status(404).json({ erro: 'Job não encontrado' });
+  job.status = 'pagamento_confirmado';
+  job.mensagem = '✅ Pagamento confirmado. Aguardando upload do MP3...';
+  // Avisar cliente que iniciou
+  await avisarInicio(job, req.params.jobId).catch(() => {});
+  res.json({ ok: true });
+});
+
+
 app.post('/api/admin/upload/:jobId', adminAuth, upload.single('audio'), async (req, res) => {
   const job = jobs[req.params.jobId];
   if (!job) return res.status(404).json({ erro: 'Job não encontrado' });
@@ -112,29 +124,32 @@ app.post('/api/admin/upload/:jobId', adminAuth, upload.single('audio'), async (r
   job.mensagem = 'Iniciando processamento...';
 
   try {
-    // Fazer upload para AssemblyAI AGORA enquanto arquivo existe
+    // Fazer upload para AssemblyAI usando o buffer em memória
     atualizar(req.params.jobId, 'transcrevendo', 20, '⏫ Enviando áudio para transcrição...');
     const ASSEMBLY_KEY = process.env.ASSEMBLYAI_API_KEY || '';
-    const fileStream = fs.createReadStream(req.file.path);
-    const uploadResp = await axios.post('https://api.assemblyai.com/v2/upload', fileStream, {
-      headers: { 'authorization': ASSEMBLY_KEY, 'content-type': 'application/octet-stream' },
+
+    const uploadResp = await axios.post('https://api.assemblyai.com/v2/upload', req.file.buffer, {
+      headers: {
+        'authorization': ASSEMBLY_KEY,
+        'content-type': 'application/octet-stream',
+        'transfer-encoding': 'chunked'
+      },
       maxBodyLength: Infinity,
-      timeout: 120000
+      maxContentLength: Infinity,
+      timeout: 300000
     });
+
     console.log('AssemblyAI upload resp:', JSON.stringify(uploadResp.data));
     const audioUrl = uploadResp.data.upload_url;
-    if (!audioUrl) throw new Error('Falha no upload para AssemblyAI');
+    if (!audioUrl) throw new Error('AssemblyAI não retornou URL de upload');
 
-    // Guardar URL do áudio no job e continuar processamento em background
     job.assemblyAudioUrl = audioUrl;
-    try { fs.unlinkSync(req.file.path); } catch(e) {} // apagar arquivo local
-
     res.json({ ok: true });
 
     // Avisar cliente
     await avisarInicio(job, req.params.jobId).catch(() => {});
 
-    // Continuar processamento em background
+    // Continuar em background
     processarComUrl(req.params.jobId).catch(err => {
       jobs[req.params.jobId].status = 'erro';
       jobs[req.params.jobId].mensagem = '❌ ' + err.message;
@@ -142,8 +157,9 @@ app.post('/api/admin/upload/:jobId', adminAuth, upload.single('audio'), async (r
 
   } catch(err) {
     const msg = err.response?.data?.error || err.response?.data?.message || err.message;
+    console.error('Erro upload AssemblyAI:', msg, err.response?.data);
     jobs[req.params.jobId].status = 'erro';
-    jobs[req.params.jobId].mensagem = '❌ AssemblyAI: ' + msg;
+    jobs[req.params.jobId].mensagem = '❌ ' + msg;
     res.status(500).json({ erro: msg });
   }
 });

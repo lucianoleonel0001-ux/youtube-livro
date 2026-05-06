@@ -203,6 +203,7 @@ function renderizar() {
   container.innerHTML = filtrados.map(([id, job]) => {
     const statusClass = {
       aguardando_pagamento:'status-aguardando',
+      pagamento_confirmado:'status-aguardando',
       iniciando:'status-processando', baixando:'status-processando',
       transcrevendo:'status-processando', gerando:'status-processando',
       diagramando:'status-processando', notificando:'status-processando',
@@ -211,6 +212,7 @@ function renderizar() {
 
     const statusLabel = {
       aguardando_pagamento:'⏳ Aguardando Pagamento',
+      pagamento_confirmado:'✅ Pagamento Confirmado',
       iniciando:'Iniciando', baixando:'Baixando áudio',
       transcrevendo:'Transcrevendo', gerando:'Gerando livro',
       diagramando:'Diagramando', notificando:'Notificando',
@@ -246,8 +248,16 @@ function renderizar() {
       <div class="pedido-acoes">
         ${job.status === 'aguardando_pagamento' ? `
           <div style="width:100%;">
+            <div style="font-size:11px;letter-spacing:1px;color:var(--gold);margin-bottom:12px;text-transform:uppercase;">
+              Confirme o pagamento para liberar o processamento:
+            </div>
+            <button class="btn-sm btn-gold" onclick="confirmarPagamento('${id}')">✅ Confirmar Pagamento Recebido</button>
+          </div>
+        ` : ''}
+        ${job.status === 'pagamento_confirmado' ? `
+          <div style="width:100%;">
             <div style="font-size:11px;letter-spacing:1px;color:var(--gold);margin-bottom:8px;text-transform:uppercase;">
-              1. Clique no link acima para abrir o vídeo → baixe o MP3 → faça upload abaixo:
+              Clique no link acima → baixe o MP3 → faça upload abaixo:
             </div>
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
               <input type="file" id="mp3-${id}" accept="audio/*,.mp3,.m4a,.mp4,.wav" style="background:var(--dark);border:1px solid #333;border-radius:6px;padding:8px;color:var(--white);font-size:13px;flex:1;min-width:200px;margin-bottom:0;"/>
@@ -277,6 +287,14 @@ function filtrar(f, el) {
   document.querySelectorAll('.filtro').forEach(e => e.classList.remove('ativo'));
   el.classList.add('ativo');
   renderizar();
+}
+
+async function confirmarPagamento(id) {
+  const r = await fetch(`/api/admin/confirmar/${id}`, { method: 'POST', headers: { 'x-admin-key': SENHA } });
+  const d = await r.json();
+  if (d.ok) notif('✅ Pagamento confirmado! Faça upload do MP3.');
+  else notif('❌ Erro: ' + (d.erro || 'desconhecido'));
+  carregarJobs();
 }
 
 async function uploadEProcessar(id) {
