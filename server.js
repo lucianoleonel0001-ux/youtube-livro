@@ -122,34 +122,21 @@ async function processarVideo(jobId) {
   fs.mkdirSync(tmpDir, { recursive: true });
 
   try {
-    // ETAPA 1 — Baixar áudio
+    // ETAPA 1 — Extrair ID e baixar MP3 via y2mate
     atualizar(jobId, 'baixando', 10, '⏬ Baixando áudio do YouTube...');
-    const audioTemplate = path.join(tmpDir, 'audio.%(ext)s');
+    const videoId = extrairVideoId(job.youtubeUrl);
+    if (!videoId) throw new Error('Link do YouTube inválido.');
 
+    const audioPath = path.join(tmpDir, 'audio.mp3');
     try {
-      await execAsync(`python3 -m yt_dlp -x --audio-format mp3 --audio-quality 0 --no-check-certificate --js-runtimes nodejs -o "${audioTemplate}" "${job.youtubeUrl}"`);
+      await baixarMp3(videoId, audioPath);
     } catch(e) {
-      throw new Error('Falha ao baixar vídeo: ' + (e.stderr || e.message).substring(0, 300));
+      throw new Error('Falha ao baixar áudio: ' + e.message.substring(0, 200));
     }
 
-    const files = fs.readdirSync(tmpDir);
-    const audioFile = files.find(f => /\.(mp3|m4a|webm|opus|ogg)$/.test(f));
-    if (!audioFile) throw new Error('Arquivo de áudio não encontrado após download.');
-    const audioFinal = path.join(tmpDir, audioFile);
-
-    // Verificar tamanho — Whisper aceita até 25MB
-    const sizeMB = fs.statSync(audioFinal).size / (1024 * 1024);
-    let audioEnviar = audioFinal;
-    if (sizeMB > 23) {
-      atualizar(jobId, 'baixando', 18, '✂️ Otimizando áudio...');
-      const audioCorte = path.join(tmpDir, 'audio_corte.mp3');
-      await execAsync(`ffmpeg -i "${audioFinal}" -t 3600 -acodec libmp3lame -ab 64k "${audioCorte}" -y`);
-      audioEnviar = audioCorte;
-    }
-
-    // ETAPA 2 — Transcrever
-    atualizar(jobId, 'transcrevendo', 30, '🎙️ Transcrevendo o áudio...');
-    const transcricao = await transcreverAudio(audioEnviar);
+    // ETAPA 2 — Transcrever com Whisper
+    atualizar(jobId, 'transcrevendo', 35, '🎙️ Transcrevendo o áudio...');
+    const transcricao = await transcreverWhisper(audioPath);
     if (!transcricao || transcricao.length < 50) throw new Error('Transcrição muito curta ou falhou.');
 
     // ETAPA 3 — Gerar livro
@@ -188,8 +175,47 @@ function atualizar(jobId, status, progresso, mensagem) {
   console.log(`[${jobId}] ${mensagem}`);
 }
 
-// ── WHISPER ───────────────────────────────────────────────────────────────
-async function transcreverAudio(audioPath) {
+// ── EXTRAIR ID DO YOUTUBE ─────────────────────────────────────────────────
+function extrairVideoId(url) {
+  const match = url.match(/(?:v=|youtu\.be\/|embed\/)([a-zA-Z0-9_-]{11})/);
+  return match ? match[1] : null;
+}
+
+// ── BAIXAR MP3 VIA Y2MATE ─────────────────────────────────────────────────
+async function baixarMp3(videoId, destPath) {
+  const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+  // Passo 1 — Analisar o vídeo
+  const resp1 = await axios.post('https://www.y2mate.com/mates/analyzeV2/ajax',
+    new URLSearchParams({ k_query: ytUrl, k_page: 'home', hl: 'en', q_auto: '1' }),
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' }, timeout: 30000 }
+  );
+
+  const vid = resp1.data.vid;
+  const k = resp1.data.links?.mp3?.mp3128?.k;
+  if (!vid || !k) throw new Error('y2mate não retornou link de MP3.');
+
+  // Passo 2 — Converter
+  const resp2 = await axios.post('https://www.y2mate.com/mates/convertV2/index',
+    new URLSearchParams({ vid, k }),
+    { headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' }, timeout: 30000 }
+  );
+
+  const dlUrl = resp2.data.dlink;
+  if (!dlUrl) throw new Error('y2mate não gerou link de download.');
+
+  // Passo 3 — Baixar o arquivo MP3
+  const writer = fs.createWriteStream(destPath);
+  const respDl = await axios.get(dlUrl, { responseType: 'stream', timeout: 120000 });
+  await new Promise((resolve, reject) => {
+    respDl.data.pipe(writer);
+    writer.on('finish', resolve);
+    writer.on('error', reject);
+  });
+}
+
+// ── TRANSCREVER COM WHISPER ───────────────────────────────────────────────
+async function transcreverWhisper(audioPath) {
   const form = new FormData();
   form.append('file', fs.createReadStream(audioPath));
   form.append('model', 'whisper-1');
@@ -204,7 +230,7 @@ async function transcreverAudio(audioPath) {
   return resp.data;
 }
 
-// ── GERAR LIVRO COM CLAUDE ────────────────────────────────────────────────
+
 async function gerarLivro(transcricao, nomeAutor) {
   const prompt = `Você é um escritor e editor profissional brasileiro. Com base na transcrição abaixo de um vídeo do YouTube, crie um livro completo em português com exatamente 12 capítulos. Melhore a linguagem falada para escrita literária fluente. Corrija erros. Cada capítulo deve ter pelo menos 3 parágrafos completos. Responda APENAS em JSON válido sem texto extra:
 {"titulo":"string","subtitulo":"string","autor":"${nomeAutor || 'Autor'}","capitulos":[{"numero":1,"titulo":"string","texto":"paragrafo1\\n\\nparagrafo2\\n\\nparagrafo3"}]}
