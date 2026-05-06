@@ -241,7 +241,7 @@ async function processarComAudio(jobId) {
   }
 }
 
-
+function atualizar(jobId, status, progresso, mensagem) {
   jobs[jobId] = { ...jobs[jobId], status, progresso, mensagem };
   console.log(`[${jobId}] ${mensagem}`);
 }
