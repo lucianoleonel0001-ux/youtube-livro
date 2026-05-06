@@ -122,21 +122,15 @@ async function processarVideo(jobId) {
   fs.mkdirSync(tmpDir, { recursive: true });
 
   try {
-    // ETAPA 1 — Extrair ID e baixar MP3 via y2mate
-    atualizar(jobId, 'baixando', 10, '⏬ Baixando áudio do YouTube...');
+    // ETAPA 1 — Enviar link para AssemblyAI transcrever
+    atualizar(jobId, 'baixando', 10, '🔗 Enviando vídeo para transcrição...');
     const videoId = extrairVideoId(job.youtubeUrl);
     if (!videoId) throw new Error('Link do YouTube inválido.');
+    const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
 
-    const audioPath = path.join(tmpDir, 'audio.mp3');
-    try {
-      await baixarMp3(videoId, audioPath);
-    } catch(e) {
-      throw new Error('Falha ao baixar áudio: ' + e.message.substring(0, 200));
-    }
-
-    // ETAPA 2 — Transcrever com Whisper
-    atualizar(jobId, 'transcrevendo', 35, '🎙️ Transcrevendo o áudio...');
-    const transcricao = await transcreverWhisper(audioPath);
+    // ETAPA 2 — Transcrever com AssemblyAI
+    atualizar(jobId, 'transcrevendo', 30, '🎙️ Transcrevendo o áudio...');
+    const transcricao = await transcreverAssemblyAI(ytUrl);
     if (!transcricao || transcricao.length < 50) throw new Error('Transcrição muito curta ou falhou.');
 
     // ETAPA 3 — Gerar livro
@@ -181,53 +175,29 @@ function extrairVideoId(url) {
   return match ? match[1] : null;
 }
 
-// ── BAIXAR MP3 VIA Y2MATE ─────────────────────────────────────────────────
-async function baixarMp3(videoId, destPath) {
-  const ytUrl = `https://www.youtube.com/watch?v=${videoId}`;
+// ── TRANSCREVER COM ASSEMBLYAI ────────────────────────────────────────────
+async function transcreverAssemblyAI(youtubeUrl) {
+  const ASSEMBLY_KEY = process.env.ASSEMBLYAI_API_KEY || '';
+  const headers = { 'authorization': ASSEMBLY_KEY, 'content-type': 'application/json' };
 
-  // Passo 1 — Analisar o vídeo
-  const resp1 = await axios.post('https://www.y2mate.com/mates/analyzeV2/ajax',
-    new URLSearchParams({ k_query: ytUrl, k_page: 'home', hl: 'en', q_auto: '1' }),
-    { headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' }, timeout: 30000 }
-  );
+  // Submeter transcrição
+  const submit = await axios.post('https://api.assemblyai.com/v2/transcript', {
+    audio_url: youtubeUrl,
+    language_code: 'pt'
+  }, { headers, timeout: 30000 });
 
-  const vid = resp1.data.vid;
-  const k = resp1.data.links?.mp3?.mp3128?.k;
-  if (!vid || !k) throw new Error('y2mate não retornou link de MP3.');
+  const transcriptId = submit.data.id;
+  if (!transcriptId) throw new Error('AssemblyAI não retornou ID de transcrição.');
 
-  // Passo 2 — Converter
-  const resp2 = await axios.post('https://www.y2mate.com/mates/convertV2/index',
-    new URLSearchParams({ vid, k }),
-    { headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' }, timeout: 30000 }
-  );
-
-  const dlUrl = resp2.data.dlink;
-  if (!dlUrl) throw new Error('y2mate não gerou link de download.');
-
-  // Passo 3 — Baixar o arquivo MP3
-  const writer = fs.createWriteStream(destPath);
-  const respDl = await axios.get(dlUrl, { responseType: 'stream', timeout: 120000 });
-  await new Promise((resolve, reject) => {
-    respDl.data.pipe(writer);
-    writer.on('finish', resolve);
-    writer.on('error', reject);
-  });
-}
-
-// ── TRANSCREVER COM WHISPER ───────────────────────────────────────────────
-async function transcreverWhisper(audioPath) {
-  const form = new FormData();
-  form.append('file', fs.createReadStream(audioPath));
-  form.append('model', 'whisper-1');
-  form.append('language', 'pt');
-  form.append('response_format', 'text');
-
-  const resp = await axios.post('https://api.openai.com/v1/audio/transcriptions', form, {
-    headers: { ...form.getHeaders(), Authorization: `Bearer ${OPENAI_KEY}` },
-    maxBodyLength: Infinity,
-    timeout: 300000
-  });
-  return resp.data;
+  // Aguardar conclusão (polling)
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 5000));
+    const poll = await axios.get(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, { headers, timeout: 15000 });
+    const status = poll.data.status;
+    if (status === 'completed') return poll.data.text;
+    if (status === 'error') throw new Error('AssemblyAI erro: ' + poll.data.error);
+  }
+  throw new Error('Transcrição demorou demais (timeout).');
 }
 
 
