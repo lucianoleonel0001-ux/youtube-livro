@@ -226,7 +226,7 @@ function renderizar() {
         <div>
           <div class="pedido-nome">${job.nome || 'Sem nome'}</div>
           <div class="pedido-contato">📧 ${job.email || '-'} &nbsp;|&nbsp; 📱 ${job.whatsapp || '-'}</div>
-          <div class="pedido-url">▶ ${job.youtubeUrl || '-'}</div>
+          <a href="${job.youtubeUrl}" target="_blank" style="display:block;font-size:12px;color:rgba(201,168,76,0.8);word-break:break-all;margin-bottom:6px;text-decoration:none;">▶ ${job.youtubeUrl || '-'}</a>
           ${job.titulo ? `<div class="pedido-titulo">📖 "${job.titulo}"</div>` : ''}
           <div class="pedido-data">⏱ ${data}</div>
         </div>
@@ -244,10 +244,28 @@ function renderizar() {
       ${job.status === 'erro' ? `<div style="margin-top:10px;font-size:13px;color:var(--red);">❌ ${job.mensagem || job.erro || 'Erro desconhecido'}</div>` : ''}
 
       <div class="pedido-acoes">
-        ${job.status === 'aguardando_pagamento' ? `<button class="btn-sm btn-gold" onclick="liberar('${id}')">✅ Confirmar Pagamento & Processar</button>` : ''}
+        ${job.status === 'aguardando_pagamento' ? `
+          <div style="width:100%;">
+            <div style="font-size:11px;letter-spacing:1px;color:var(--gold);margin-bottom:8px;text-transform:uppercase;">
+              1. Clique no link acima para abrir o vídeo → baixe o MP3 → faça upload abaixo:
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input type="file" id="mp3-${id}" accept="audio/*,.mp3,.m4a,.mp4,.wav" style="background:var(--dark);border:1px solid #333;border-radius:6px;padding:8px;color:var(--white);font-size:13px;flex:1;min-width:200px;margin-bottom:0;"/>
+              <button class="btn-sm btn-gold" onclick="uploadEProcessar('${id}')">▶ Processar →</button>
+            </div>
+          </div>
+        ` : ''}
         ${job.status === 'pronto' ? `<a href="/api/download/${id}" target="_blank"><button class="btn-sm btn-gold">📥 Baixar .docx</button></a>` : ''}
         ${job.status === 'pronto' ? `<button class="btn-sm btn-outline" onclick="reenviarNotif('${id}')">📲 Reenviar aviso</button>` : ''}
-        ${job.status === 'erro' ? `<button class="btn-sm btn-gold" onclick="liberar('${id}')">↻ Reprocessar</button>` : ''}
+        ${job.status === 'erro' ? `
+          <div style="width:100%;">
+            <div style="font-size:11px;letter-spacing:1px;color:var(--gold);margin-bottom:8px;text-transform:uppercase;">Fazer upload do MP3 e reprocessar:</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input type="file" id="mp3-${id}" accept="audio/*,.mp3,.m4a,.mp4,.wav" style="background:var(--dark);border:1px solid #333;border-radius:6px;padding:8px;color:var(--white);font-size:13px;flex:1;min-width:200px;margin-bottom:0;"/>
+              <button class="btn-sm btn-gold" onclick="uploadEProcessar('${id}')">↻ Reprocessar →</button>
+            </div>
+          </div>
+        ` : ''}
         <button class="btn-sm btn-red" onclick="excluir('${id}')">🗑 Excluir</button>
       </div>
     </div>`;
@@ -259,6 +277,25 @@ function filtrar(f, el) {
   document.querySelectorAll('.filtro').forEach(e => e.classList.remove('ativo'));
   el.classList.add('ativo');
   renderizar();
+}
+
+async function uploadEProcessar(id) {
+  const input = document.getElementById(`mp3-${id}`);
+  if (!input || !input.files[0]) { notif('❌ Selecione um arquivo MP3!'); return; }
+
+  notif('⏫ Fazendo upload...');
+  const form = new FormData();
+  form.append('audio', input.files[0]);
+
+  const r = await fetch(`/api/admin/upload/${id}`, {
+    method: 'POST',
+    headers: { 'x-admin-key': SENHA },
+    body: form
+  });
+  const d = await r.json();
+  if (d.ok) notif('✅ Upload feito! Processando...');
+  else notif('❌ Erro: ' + (d.erro || 'desconhecido'));
+  carregarJobs();
 }
 
 async function liberar(id) {

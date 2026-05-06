@@ -7,6 +7,8 @@ const path = require('path');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const execAsync = promisify(exec);
+const multer = require('multer');
+const upload = multer({ dest: '/tmp/uploads/' });
 const {
   Document, Packer, Paragraph, TextRun,
   AlignmentType, PageBreak, TabStopPosition, TabStopType, Leader
@@ -99,7 +101,28 @@ app.get('/api/download/:jobId', (req, res) => {
   res.download(job.docxPath, job.nomeArquivo || 'livro.docx');
 });
 
-// ── ADMIN ROTAS ───────────────────────────────────────────────────────────
+// ── UPLOAD MP3 + PROCESSAR ────────────────────────────────────────────────
+app.post('/api/admin/upload/:jobId', adminAuth, upload.single('audio'), async (req, res) => {
+  const job = jobs[req.params.jobId];
+  if (!job) return res.status(404).json({ erro: 'Job não encontrado' });
+  if (!req.file) return res.status(400).json({ erro: 'Nenhum arquivo enviado' });
+
+  job.status = 'iniciando';
+  job.progresso = 0;
+  job.mensagem = 'Iniciando processamento...';
+  job.audioPath = req.file.path; // caminho do MP3 já no servidor
+  res.json({ ok: true });
+
+  // Avisar cliente que iniciou
+  await avisarInicio(job, req.params.jobId).catch(() => {});
+
+  processarComAudio(req.params.jobId).catch(err => {
+    jobs[req.params.jobId].status = 'erro';
+    jobs[req.params.jobId].mensagem = '❌ ' + err.message;
+  });
+});
+
+
 app.get('/api/admin/jobs', adminAuth, (req, res) => res.json(jobs));
 
 app.post('/api/admin/reenviar/:jobId', adminAuth, async (req, res) => {
@@ -173,7 +196,52 @@ async function processarVideo(jobId) {
   }
 }
 
-function atualizar(jobId, status, progresso, mensagem) {
+// ── PROCESSAR COM ÁUDIO JÁ ENVIADO ───────────────────────────────────────
+async function processarComAudio(jobId) {
+  const job = jobs[jobId];
+  const tmpDir = `/tmp/job_${jobId}`;
+  fs.mkdirSync(tmpDir, { recursive: true });
+
+  try {
+    const audioPath = job.audioPath;
+    if (!audioPath || !fs.existsSync(audioPath)) throw new Error('Arquivo de áudio não encontrado.');
+
+    // ETAPA 1 — Transcrever
+    atualizar(jobId, 'transcrevendo', 30, '🎙️ Transcrevendo o áudio...');
+    const transcricao = await transcreverAssemblyAI(audioPath);
+    if (!transcricao || transcricao.length < 50) throw new Error('Transcrição muito curta ou falhou.');
+
+    // ETAPA 2 — Gerar livro
+    atualizar(jobId, 'gerando', 55, '🤖 Criando os 12 capítulos com IA...');
+    const livro = await gerarLivro(transcricao, job.nome);
+
+    // ETAPA 3 — Diagramar
+    atualizar(jobId, 'diagramando', 80, '📐 Diagramando o livro...');
+    const docxPath = path.join(tmpDir, 'livro.docx');
+    await gerarDocx(livro, docxPath);
+
+    const nomeArquivo = livro.titulo.replace(/[^a-zA-Z0-9À-ú ]/g, '_').substring(0, 40) + '.docx';
+    job.docxPath = docxPath;
+    job.nomeArquivo = nomeArquivo;
+    job.titulo = livro.titulo;
+
+    // ETAPA 4 — Notificar
+    atualizar(jobId, 'notificando', 92, '📲 Enviando notificações...');
+    await Promise.allSettled([enviarEmail(job, jobId), enviarWhatsapp(job, jobId)]);
+
+    atualizar(jobId, 'pronto', 100, '✅ Livro pronto para download!');
+
+    // Limpar áudio temporário
+    try { fs.unlinkSync(audioPath); } catch(e) {}
+
+  } catch(err) {
+    jobs[jobId].status = 'erro';
+    jobs[jobId].mensagem = '❌ ' + err.message;
+    throw err;
+  }
+}
+
+
   jobs[jobId] = { ...jobs[jobId], status, progresso, mensagem };
   console.log(`[${jobId}] ${mensagem}`);
 }
