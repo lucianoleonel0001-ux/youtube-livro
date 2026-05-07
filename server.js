@@ -102,6 +102,48 @@ app.post('/api/admin/processar-url/:jobId', adminAuth, async (req, res) => {
   });
 });
 
+// ── ADMIN: UPLOAD MP3 EM STREAMING DIRETO PARA ASSEMBLYAI ────────────────
+app.post('/api/admin/upload/:jobId', adminAuth, async (req, res) => {
+  const jobId = req.params.jobId;
+  const job = jobs[jobId];
+  if (!job) return res.status(404).json({ erro: 'Não encontrado' });
+
+  job.status = 'transcrevendo';
+  job.progresso = 15;
+  job.mensagem = '⏫ Enviando áudio para transcrição...';
+
+  // Responder imediatamente — não deixar o browser esperando
+  res.json({ ok: true });
+
+  // Stream do body direto para AssemblyAI
+  try {
+    const uploadResp = await axios.post('https://api.assemblyai.com/v2/upload', req, {
+      headers: {
+        'authorization': ASSEMBLY_KEY,
+        'content-type': req.headers['content-type'] || 'application/octet-stream',
+      },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+      timeout: 600000
+    });
+
+    const audioUrl = uploadResp.data.upload_url;
+    if (!audioUrl) throw new Error('AssemblyAI não retornou URL de upload');
+
+    job.assemblyAudioUrl = audioUrl;
+    job.progresso = 30;
+    job.mensagem = '🎙️ Transcrevendo o áudio...';
+
+    await processarComUrl(jobId);
+
+  } catch(err) {
+    const msg = err.response?.data?.error || err.message;
+    console.error('Erro upload AssemblyAI:', msg);
+    job.status = 'erro';
+    job.mensagem = '❌ ' + msg;
+  }
+});
+
 // ── ADMIN: REENVIAR NOTIFICAÇÕES ──────────────────────────────────────────
 app.post('/api/admin/reenviar/:jobId', adminAuth, async (req, res) => {
   const job = jobs[req.params.jobId];

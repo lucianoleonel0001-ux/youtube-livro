@@ -269,36 +269,23 @@ async function uploadEProcessar(id) {
 
   const progEl = document.getElementById(`prog-${id}`);
   if (progEl) progEl.style.display = 'block';
-  notif('⏫ Enviando MP3 direto para transcrição...');
+  notif('⏫ Enviando MP3... aguarde.');
 
   try {
-    // Buscar chave do AssemblyAI
-    const keyResp = await fetch('/api/admin/assemblykey', { headers: { 'x-admin-key': SENHA } });
-    const { key } = await keyResp.json();
-    if (!key) throw new Error('Chave AssemblyAI não configurada no servidor');
-
-    // Upload direto do browser para AssemblyAI (sem passar pelo Render)
-    const uploadResp = await fetch('https://api.assemblyai.com/v2/upload', {
+    // Enviar o arquivo como stream direto para o servidor
+    const r = await fetch(`/api/admin/upload/${id}`, {
       method: 'POST',
-      headers: { 'authorization': key, 'content-type': 'application/octet-stream' },
-      body: input.files[0]
+      headers: {
+        'x-admin-key': SENHA,
+        'content-type': input.files[0].type || 'application/octet-stream'
+      },
+      body: input.files[0],
+      duplex: 'half'
     });
-    if (!uploadResp.ok) {
-      const err = await uploadResp.json();
-      throw new Error('AssemblyAI upload: ' + (err.error || uploadResp.status));
-    }
-    const { upload_url } = await uploadResp.json();
-    if (!upload_url) throw new Error('AssemblyAI não retornou URL');
 
-    // Enviar URL para o servidor processar
-    const r = await fetch(`/api/admin/processar-url/${id}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-key': SENHA },
-      body: JSON.stringify({ audioUrl: upload_url })
-    });
     const d = await r.json();
-    if (d.ok) notif('✅ Áudio enviado! Processando o livro...');
-    else throw new Error(d.erro || 'Erro ao iniciar processamento');
+    if (d.ok) notif('✅ MP3 enviado! Transcrevendo...');
+    else throw new Error(d.erro || 'Erro ao enviar');
 
   } catch(e) {
     notif('❌ ' + e.message);
