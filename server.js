@@ -148,7 +148,7 @@ TRANSCRIÇÃO:
 ${transcricao.substring(0, 12000)}`;
 
   const resp = await axios.post('https://api.anthropic.com/v1/messages', {
-    model: 'claude-opus-4-5',
+    model: 'claude-sonnet-4-5',
     max_tokens: 8000,
     messages: [{ role: 'user', content: prompt }]
   }, {

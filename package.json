@@ -1,21 +1,18 @@
 {
   "name": "youtube-livro",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Lucel Digital - YouTube para Livro",
+  "main": "server.js",
   "scripts": {
-    "build": "npm install",
     "start": "node server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
-    "axios": "^1.16.0",
-    "docx": "^9.6.1",
-    "express": "^5.2.1",
-    "form-data": "^4.0.5",
-    "multer": "^2.1.1",
-    "nodemailer": "^8.0.7"
+    "axios": "^1.7.0",
+    "docx": "^9.0.0",
+    "express": "^4.21.0",
+    "nodemailer": "^6.9.0"
   }
 }

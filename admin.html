@@ -229,7 +229,7 @@ function renderizar() {
         ${job.status === 'pagamento_confirmado' || job.status === 'erro' ? `
           <div class="upload-area">
             <span class="upload-label">📝 ${job.status === 'erro' ? 'Reprocessar — cole a transcrição abaixo:' : 'Cole a transcrição do vídeo abaixo:'}</span>
-            <textarea id="texto-${id}" placeholder="Cole aqui o texto transcrito do AssemblyAI..." style="width:100%;background:var(--dark);border:1px solid #333;border-radius:6px;padding:12px;color:var(--white);font-size:13px;min-height:150px;font-family:'Lato',sans-serif;resize:vertical;margin-bottom:8px;outline:none;"></textarea>
+            <textarea id="texto-${id}" placeholder="Cole aqui o texto transcrito do vídeo..." style="width:100%;background:var(--dark);border:1px solid #333;border-radius:6px;padding:12px;color:var(--white);font-size:13px;min-height:150px;font-family:'Lato',sans-serif;resize:vertical;margin-bottom:8px;outline:none;"></textarea>
             <button class="btn-sm btn-gold" onclick="processarTexto('${id}')">▶ Gerar Livro →</button>
           </div>
         ` : ''}
@@ -255,7 +255,7 @@ function filtrar(f, el) {
 async function confirmarPagamento(id) {
   const r = await fetch(`/api/admin/confirmar/${id}`, { method: 'POST', headers: { 'x-admin-key': SENHA } });
   const d = await r.json();
-  if (d.ok) notif('✅ Pagamento confirmado! Faça o upload do MP3.');
+  if (d.ok) notif('✅ Pagamento confirmado! Cole a transcrição abaixo.');
   else notif('❌ ' + (d.erro || 'Erro'));
   carregarJobs();
 }
@@ -278,37 +278,6 @@ async function processarTexto(id) {
     else throw new Error(d.erro || 'Erro');
   } catch(e) {
     notif('❌ ' + e.message);
-  }
-  carregarJobs();
-}
-
-async function uploadEProcessar(id) {
-  const input = document.getElementById(`mp3-${id}`);
-  if (!input || !input.files[0]) { notif('❌ Selecione um arquivo MP3!'); return; }
-
-  const progEl = document.getElementById(`prog-${id}`);
-  if (progEl) progEl.style.display = 'block';
-  notif('⏫ Enviando MP3... aguarde.');
-
-  try {
-    // Enviar o arquivo como stream direto para o servidor
-    const r = await fetch(`/api/admin/upload/${id}`, {
-      method: 'POST',
-      headers: {
-        'x-admin-key': SENHA,
-        'content-type': input.files[0].type || 'application/octet-stream'
-      },
-      body: input.files[0],
-      duplex: 'half'
-    });
-
-    const d = await r.json();
-    if (d.ok) notif('✅ MP3 enviado! Transcrevendo...');
-    else throw new Error(d.erro || 'Erro ao enviar');
-
-  } catch(e) {
-    notif('❌ ' + e.message);
-    if (progEl) progEl.style.display = 'none';
   }
   carregarJobs();
 }
