@@ -1,25 +1,18 @@
 const express = require('express');
 const axios = require('axios');
-const FormData = require('form-data');
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
-const { promisify } = require('util');
-const multer = require('multer');
 const {
   Document, Packer, Paragraph, TextRun,
   AlignmentType, PageBreak, TabStopPosition, TabStopType, Leader
 } = require('docx');
 
 const app = express();
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Upload em memória — browser envia direto para AssemblyAI, não passa pelo Render
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } });
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
-const ASSEMBLY_KEY  = process.env.ASSEMBLYAI_API_KEY || '';
 const EMAIL_USER    = process.env.EMAIL_USER || 'graficalucel@gmail.com';
 const EMAIL_PASS    = process.env.EMAIL_PASS || '';
 const BASE_URL      = process.env.BASE_URL   || 'http://localhost:3000';
@@ -67,81 +60,14 @@ app.get('/api/download/:jobId', (req, res) => {
 // ── ADMIN: LISTAR JOBS ────────────────────────────────────────────────────
 app.get('/api/admin/jobs', adminAuth, (req, res) => res.json(jobs));
 
-// ── ADMIN: RETORNAR CHAVE ASSEMBLYAI PARA O BROWSER ──────────────────────
-app.get('/api/admin/assemblykey', adminAuth, (req, res) => {
-  res.json({ key: ASSEMBLY_KEY });
-});
-
 // ── ADMIN: CONFIRMAR PAGAMENTO ────────────────────────────────────────────
 app.post('/api/admin/confirmar/:jobId', adminAuth, async (req, res) => {
   const job = jobs[req.params.jobId];
   if (!job) return res.status(404).json({ erro: 'Não encontrado' });
   job.status = 'pagamento_confirmado';
-  job.mensagem = '✅ Pagamento confirmado. Aguardando upload do MP3...';
+  job.mensagem = '✅ Pagamento confirmado. Aguardando transcrição...';
   await avisarInicio(job, req.params.jobId).catch(() => {});
   res.json({ ok: true });
-});
-
-// ── ADMIN: RECEBER URL DO ASSEMBLYAI E PROCESSAR ──────────────────────────
-// (browser faz upload direto para AssemblyAI e manda a URL aqui)
-app.post('/api/admin/processar-url/:jobId', adminAuth, async (req, res) => {
-  const job = jobs[req.params.jobId];
-  if (!job) return res.status(404).json({ erro: 'Não encontrado' });
-  const { audioUrl } = req.body;
-  if (!audioUrl) return res.status(400).json({ erro: 'URL do áudio obrigatória' });
-
-  job.assemblyAudioUrl = audioUrl;
-  job.status = 'transcrevendo';
-  job.progresso = 30;
-  job.mensagem = '🎙️ Transcrevendo o áudio...';
-  res.json({ ok: true });
-
-  processarComUrl(req.params.jobId).catch(err => {
-    jobs[req.params.jobId].status = 'erro';
-    jobs[req.params.jobId].mensagem = '❌ ' + err.message;
-  });
-});
-
-// ── ADMIN: UPLOAD MP3 EM STREAMING DIRETO PARA ASSEMBLYAI ────────────────
-app.post('/api/admin/upload/:jobId', adminAuth, async (req, res) => {
-  const jobId = req.params.jobId;
-  const job = jobs[jobId];
-  if (!job) return res.status(404).json({ erro: 'Não encontrado' });
-
-  job.status = 'transcrevendo';
-  job.progresso = 15;
-  job.mensagem = '⏫ Enviando áudio para transcrição...';
-
-  // Responder imediatamente — não deixar o browser esperando
-  res.json({ ok: true });
-
-  // Stream do body direto para AssemblyAI
-  try {
-    const uploadResp = await axios.post('https://api.assemblyai.com/v2/upload', req, {
-      headers: {
-        'authorization': ASSEMBLY_KEY,
-        'content-type': req.headers['content-type'] || 'application/octet-stream',
-      },
-      maxBodyLength: Infinity,
-      maxContentLength: Infinity,
-      timeout: 600000
-    });
-
-    const audioUrl = uploadResp.data.upload_url;
-    if (!audioUrl) throw new Error('AssemblyAI não retornou URL de upload');
-
-    job.assemblyAudioUrl = audioUrl;
-    job.progresso = 30;
-    job.mensagem = '🎙️ Transcrevendo o áudio...';
-
-    await processarComUrl(jobId);
-
-  } catch(err) {
-    const msg = err.response?.data?.error || err.message;
-    console.error('Erro upload AssemblyAI:', msg);
-    job.status = 'erro';
-    job.mensagem = '❌ ' + msg;
-  }
 });
 
 // ── ADMIN: PROCESSAR TRANSCRIÇÃO COLADA ──────────────────────────────────
@@ -163,7 +89,7 @@ app.post('/api/admin/processar-texto/:jobId', adminAuth, async (req, res) => {
   });
 });
 
-
+// ── ADMIN: REENVIAR NOTIFICAÇÕES ──────────────────────────────────────────
 app.post('/api/admin/reenviar/:jobId', adminAuth, async (req, res) => {
   const job = jobs[req.params.jobId];
   if (!job) return res.status(404).json({ erro: 'Não encontrado' });
@@ -184,11 +110,9 @@ async function processarComTranscricao(jobId) {
   fs.mkdirSync(tmpDir, { recursive: true });
 
   try {
-    // Gerar livro
     atualizar(jobId, 'gerando', 55, '🤖 Criando os 12 capítulos com IA...');
     const livro = await gerarLivro(job.transcricao, job.nome);
 
-    // Diagramar
     atualizar(jobId, 'diagramando', 82, '📐 Diagramando o livro...');
     const docxPath = path.join(tmpDir, 'livro.docx');
     await gerarDocx(livro, docxPath);
@@ -198,63 +122,6 @@ async function processarComTranscricao(jobId) {
     job.nomeArquivo = nomeArquivo;
     job.titulo = livro.titulo;
 
-    // Notificar
-    atualizar(jobId, 'notificando', 93, '📲 Enviando notificações...');
-    await Promise.allSettled([enviarEmail(job, jobId), enviarWhatsapp(job, jobId)]);
-
-    atualizar(jobId, 'pronto', 100, '✅ Livro pronto para download!');
-
-  } catch(err) {
-    jobs[jobId].status = 'erro';
-    jobs[jobId].mensagem = '❌ ' + err.message;
-    throw err;
-  }
-}
-
-
-async function processarComUrl(jobId) {
-  const job = jobs[jobId];
-  const tmpDir = `/tmp/job_${jobId}`;
-  fs.mkdirSync(tmpDir, { recursive: true });
-
-  try {
-    // 1. Submeter transcrição
-    atualizar(jobId, 'transcrevendo', 35, '🎙️ Transcrevendo o áudio...');
-    const headers = { 'authorization': ASSEMBLY_KEY };
-
-    const submit = await axios.post('https://api.assemblyai.com/v2/transcript', {
-      audio_url: job.assemblyAudioUrl,
-      language_code: 'pt'
-    }, { headers: { ...headers, 'content-type': 'application/json' }, timeout: 30000 });
-
-    const transcriptId = submit.data.id;
-    if (!transcriptId) throw new Error('AssemblyAI não retornou ID de transcrição.');
-
-    // 2. Aguardar conclusão
-    let transcricao = '';
-    for (let i = 0; i < 120; i++) {
-      await new Promise(r => setTimeout(r, 5000));
-      const poll = await axios.get(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, { headers, timeout: 15000 });
-      if (poll.data.status === 'completed') { transcricao = poll.data.text; break; }
-      if (poll.data.status === 'error') throw new Error('AssemblyAI erro: ' + poll.data.error);
-    }
-    if (!transcricao || transcricao.length < 50) throw new Error('Transcrição muito curta ou falhou.');
-
-    // 3. Gerar livro com IA
-    atualizar(jobId, 'gerando', 60, '🤖 Criando os 12 capítulos com IA...');
-    const livro = await gerarLivro(transcricao, job.nome);
-
-    // 4. Diagramar
-    atualizar(jobId, 'diagramando', 82, '📐 Diagramando o livro...');
-    const docxPath = path.join(tmpDir, 'livro.docx');
-    await gerarDocx(livro, docxPath);
-
-    const nomeArquivo = livro.titulo.replace(/[^a-zA-Z0-9À-ú ]/g, '_').substring(0, 40) + '.docx';
-    job.docxPath = docxPath;
-    job.nomeArquivo = nomeArquivo;
-    job.titulo = livro.titulo;
-
-    // 5. Notificar cliente
     atualizar(jobId, 'notificando', 93, '📲 Enviando notificações...');
     await Promise.allSettled([enviarEmail(job, jobId), enviarWhatsapp(job, jobId)]);
 
@@ -281,7 +148,7 @@ TRANSCRIÇÃO:
 ${transcricao.substring(0, 12000)}`;
 
   const resp = await axios.post('https://api.anthropic.com/v1/messages', {
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-opus-4-5',
     max_tokens: 8000,
     messages: [{ role: 'user', content: prompt }]
   }, {
@@ -301,7 +168,6 @@ async function gerarDocx(livro, outputPath) {
   const FONT_C = 'Palatino Linotype';
   const children = [];
 
-  // Página de rosto
   children.push(
     new Paragraph({ children: [new TextRun({ text: livro.titulo.toUpperCase(), font: FONT_T, size: 80, bold: true })], alignment: AlignmentType.CENTER, spacing: { before: 2000 } }),
     new Paragraph({ children: [new TextRun({ text: livro.subtitulo || '', font: FONT_C, size: 36, italics: true })], alignment: AlignmentType.CENTER, spacing: { before: 200, after: 200 } }),
@@ -310,7 +176,6 @@ async function gerarDocx(livro, outputPath) {
     new Paragraph({ children: [new PageBreak()] })
   );
 
-  // Sumário
   children.push(new Paragraph({ children: [new TextRun({ text: 'SUMÁRIO', font: FONT_T, size: 48 })], alignment: AlignmentType.CENTER, spacing: { before: 400, after: 400 } }));
   (livro.capitulos || []).forEach(cap => {
     children.push(new Paragraph({
@@ -325,7 +190,6 @@ async function gerarDocx(livro, outputPath) {
   });
   children.push(new Paragraph({ children: [new PageBreak()] }));
 
-  // Capítulos
   (livro.capitulos || []).forEach(cap => {
     children.push(
       new Paragraph({ children: [new TextRun({ text: `CAPÍTULO ${cap.numero}`, font: FONT_T, size: 28, color: '888888' })], spacing: { before: 400, after: 100 } }),
@@ -385,10 +249,9 @@ async function avisarInicio(job, jobId) {
     subject: `🚀 Seu livro está sendo gerado — Lucel Digital`,
     html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#111;color:#F5F0E8;padding:40px;border-radius:12px;">
       <h1 style="color:#C9A84C;">Lucel Digital</h1>
-      <h2>Seu livro está sendo gerado! 🚀</h2>
+      <h2>Confirmamos seu pagamento! 🚀</h2>
       <p>Olá, ${job.nome || 'autor'}!<br><br>
-      Confirmamos seu pagamento e o processamento do seu livro <strong>deu início agora</strong>.<br><br>
-      Em breve você receberá o livro .docx no seu e-mail e WhatsApp.</p>
+      Estamos gerando seu livro agora. Em breve você receberá o .docx no seu e-mail e WhatsApp.</p>
       <p style="font-size:12px;color:#888;margin-top:32px;">Lucel Digital · graficalucel@gmail.com · (11) 93496-4127</p>
     </div>`
   });
