@@ -228,9 +228,12 @@ function renderizar() {
 
         ${job.status === 'pagamento_confirmado' || job.status === 'erro' ? `
           <div class="upload-area">
-            <span class="upload-label">📝 ${job.status === 'erro' ? 'Reprocessar — cole a transcrição abaixo:' : 'Cole a transcrição do vídeo abaixo:'}</span>
-            <textarea id="texto-${id}" placeholder="Cole aqui o texto transcrito do vídeo..." style="width:100%;background:var(--dark);border:1px solid #333;border-radius:6px;padding:12px;color:var(--white);font-size:13px;min-height:150px;font-family:'Lato',sans-serif;resize:vertical;margin-bottom:8px;outline:none;"></textarea>
-            <button class="btn-sm btn-gold" onclick="processarTexto('${id}')">▶ Gerar Livro →</button>
+            <span class="upload-label">📁 ${job.status === 'erro' ? 'Reprocessar — faça upload do MP3:' : 'Faça upload do MP3 para processar:'}</span>
+            <div class="upload-row">
+              <input type="file" id="mp3-${id}" class="upload-input" accept="audio/*,.mp3,.m4a,.mp4,.wav"/>
+              <button class="btn-sm btn-gold" onclick="uploadEProcessar('${id}')">▶ Processar →</button>
+            </div>
+            <div class="upload-progress" id="prog-${id}">⏫ Enviando para transcrição...</div>
           </div>
         ` : ''}
 
@@ -255,29 +258,33 @@ function filtrar(f, el) {
 async function confirmarPagamento(id) {
   const r = await fetch(`/api/admin/confirmar/${id}`, { method: 'POST', headers: { 'x-admin-key': SENHA } });
   const d = await r.json();
-  if (d.ok) notif('✅ Pagamento confirmado! Cole a transcrição abaixo.');
+  if (d.ok) notif('✅ Pagamento confirmado! Faça o upload do MP3.');
   else notif('❌ ' + (d.erro || 'Erro'));
   carregarJobs();
 }
 
-async function processarTexto(id) {
-  const textarea = document.getElementById(`texto-${id}`);
-  if (!textarea || textarea.value.trim().length < 100) {
-    notif('❌ Cole o texto da transcrição primeiro!');
-    return;
-  }
-  notif('🤖 Enviando transcrição para gerar o livro...');
+async function uploadEProcessar(id) {
+  const input = document.getElementById(`mp3-${id}`);
+  if (!input || !input.files[0]) { notif('❌ Selecione um arquivo MP3!'); return; }
+
+  const progEl = document.getElementById(`prog-${id}`);
+  if (progEl) progEl.style.display = 'block';
+  notif('⏫ Enviando MP3... aguarde.');
+
   try {
-    const r = await fetch(`/api/admin/processar-texto/${id}`, {
+    const form = new FormData();
+    form.append('audio', input.files[0]);
+    const r = await fetch(`/api/admin/upload/${id}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-admin-key': SENHA },
-      body: JSON.stringify({ transcricao: textarea.value.trim() })
+      headers: { 'x-admin-key': SENHA },
+      body: form
     });
     const d = await r.json();
-    if (d.ok) notif('✅ Gerando livro...');
+    if (d.ok) notif('✅ MP3 enviado! Transcrevendo...');
     else throw new Error(d.erro || 'Erro');
   } catch(e) {
     notif('❌ ' + e.message);
+    if (progEl) progEl.style.display = 'none';
   }
   carregarJobs();
 }

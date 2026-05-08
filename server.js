@@ -3,6 +3,7 @@ const axios = require('axios');
 const nodemailer = require('nodemailer');
 const fs = require('fs');
 const path = require('path');
+const multer = require('multer');
 const {
   Document, Packer, Paragraph, TextRun,
   AlignmentType, PageBreak, TabStopPosition, TabStopType, Leader
@@ -12,7 +13,11 @@ const app = express();
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Upload em memória — buffer não some entre requisições
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 * 1024 } });
+
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
+const ASSEMBLY_KEY  = process.env.ASSEMBLYAI_API_KEY || '';
 const EMAIL_USER    = process.env.EMAIL_USER || 'graficalucel@gmail.com';
 const EMAIL_PASS    = process.env.EMAIL_PASS || '';
 const BASE_URL      = process.env.BASE_URL   || 'http://localhost:3000';
@@ -52,44 +57,47 @@ app.get('/api/status/:jobId', (req, res) => {
 // ── DOWNLOAD ──────────────────────────────────────────────────────────────
 app.get('/api/download/:jobId', (req, res) => {
   const job = jobs[req.params.jobId];
-  if (!job || !job.docxPath || !fs.existsSync(job.docxPath))
-    return res.status(404).json({ erro: 'Arquivo não encontrado' });
-  res.download(job.docxPath, job.nomeArquivo || 'livro.docx');
+  if (!job || !job.docxBuffer)
+    return res.status(404).send('Arquivo não encontrado. O livro foi enviado por e-mail.');
+  res.setHeader('Content-Disposition', `attachment; filename="${job.nomeArquivo || 'livro.docx'}"`);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  res.send(job.docxBuffer);
 });
 
-// ── ADMIN: LISTAR JOBS ────────────────────────────────────────────────────
+// ── ADMIN ─────────────────────────────────────────────────────────────────
 app.get('/api/admin/jobs', adminAuth, (req, res) => res.json(jobs));
 
-// ── ADMIN: CONFIRMAR PAGAMENTO ────────────────────────────────────────────
 app.post('/api/admin/confirmar/:jobId', adminAuth, async (req, res) => {
   const job = jobs[req.params.jobId];
   if (!job) return res.status(404).json({ erro: 'Não encontrado' });
   job.status = 'pagamento_confirmado';
-  job.mensagem = '✅ Pagamento confirmado. Aguardando transcrição...';
+  job.mensagem = '✅ Pagamento confirmado. Aguardando upload do MP3...';
   await avisarInicio(job, req.params.jobId).catch(() => {});
   res.json({ ok: true });
 });
 
-// ── ADMIN: PROCESSAR TRANSCRIÇÃO COLADA ──────────────────────────────────
-app.post('/api/admin/processar-texto/:jobId', adminAuth, async (req, res) => {
-  const job = jobs[req.params.jobId];
+// ── ADMIN: UPLOAD MP3 → TRANSCREVE → GERA LIVRO → EMAIL COM ANEXO ────────
+app.post('/api/admin/upload/:jobId', adminAuth, upload.single('audio'), async (req, res) => {
+  const jobId = req.params.jobId;
+  const job = jobs[jobId];
   if (!job) return res.status(404).json({ erro: 'Não encontrado' });
-  const { transcricao } = req.body;
-  if (!transcricao || transcricao.length < 100) return res.status(400).json({ erro: 'Transcrição muito curta' });
+  if (!req.file) return res.status(400).json({ erro: 'Nenhum arquivo enviado' });
 
-  job.transcricao = transcricao;
-  job.status = 'gerando';
-  job.progresso = 50;
-  job.mensagem = '🤖 Criando os 12 capítulos com IA...';
+  job.status = 'transcrevendo';
+  job.progresso = 20;
+  job.mensagem = '⏫ Enviando áudio para transcrição...';
+
+  // Buffer fica em memória, não some quando o disco reseta
+  const audioBuffer = req.file.buffer;
   res.json({ ok: true });
 
-  processarComTranscricao(req.params.jobId).catch(err => {
-    jobs[req.params.jobId].status = 'erro';
-    jobs[req.params.jobId].mensagem = '❌ ' + err.message;
+  // Processa em background
+  processarComAudioBuffer(jobId, audioBuffer).catch(err => {
+    jobs[jobId].status = 'erro';
+    jobs[jobId].mensagem = '❌ ' + err.message;
   });
 });
 
-// ── ADMIN: REENVIAR NOTIFICAÇÕES ──────────────────────────────────────────
 app.post('/api/admin/reenviar/:jobId', adminAuth, async (req, res) => {
   const job = jobs[req.params.jobId];
   if (!job) return res.status(404).json({ erro: 'Não encontrado' });
@@ -97,35 +105,69 @@ app.post('/api/admin/reenviar/:jobId', adminAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
-// ── ADMIN: EXCLUIR JOB ────────────────────────────────────────────────────
 app.delete('/api/admin/excluir/:jobId', adminAuth, (req, res) => {
   delete jobs[req.params.jobId];
   res.json({ ok: true });
 });
 
-// ── PROCESSAR COM TRANSCRIÇÃO COLADA ─────────────────────────────────────
-async function processarComTranscricao(jobId) {
+// ── PROCESSAR: AUDIO BUFFER → ASSEMBLY → CLAUDE → DOCX → EMAIL ──────────
+async function processarComAudioBuffer(jobId, audioBuffer) {
   const job = jobs[jobId];
-  const tmpDir = `/tmp/job_${jobId}`;
-  fs.mkdirSync(tmpDir, { recursive: true });
 
   try {
-    atualizar(jobId, 'gerando', 55, '🤖 Criando os 12 capítulos com IA...');
-    const livro = await gerarLivro(job.transcricao, job.nome);
+    // 1. Upload para AssemblyAI (do buffer em memória, sem disco)
+    atualizar(jobId, 'transcrevendo', 25, '⏫ Enviando áudio para AssemblyAI...');
+    const headers = { 'authorization': ASSEMBLY_KEY };
+    const uploadResp = await axios.post('https://api.assemblyai.com/v2/upload', audioBuffer, {
+      headers: { ...headers, 'content-type': 'application/octet-stream' },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+      timeout: 600000
+    });
+    const audioUrl = uploadResp.data.upload_url;
+    if (!audioUrl) throw new Error('AssemblyAI não retornou URL');
 
+    // 2. Submeter transcrição
+    atualizar(jobId, 'transcrevendo', 35, '🎙️ Transcrevendo o áudio...');
+    const submit = await axios.post('https://api.assemblyai.com/v2/transcript', {
+      audio_url: audioUrl,
+      language_code: 'pt'
+    }, { headers: { ...headers, 'content-type': 'application/json' }, timeout: 30000 });
+
+    const transcriptId = submit.data.id;
+    if (!transcriptId) throw new Error('AssemblyAI não retornou ID');
+
+    // 3. Aguardar conclusão
+    let transcricao = '';
+    for (let i = 0; i < 120; i++) {
+      await new Promise(r => setTimeout(r, 5000));
+      const poll = await axios.get(`https://api.assemblyai.com/v2/transcript/${transcriptId}`, { headers, timeout: 15000 });
+      if (poll.data.status === 'completed') { transcricao = poll.data.text; break; }
+      if (poll.data.status === 'error') throw new Error('AssemblyAI: ' + poll.data.error);
+    }
+    if (!transcricao || transcricao.length < 50) throw new Error('Transcrição falhou');
+
+    // 4. Gerar livro com IA
+    atualizar(jobId, 'gerando', 60, '🤖 Criando os 12 capítulos com IA...');
+    const livro = await gerarLivro(transcricao, job.nome);
+
+    // 5. Diagramar (gera o DOCX em buffer, sem salvar em disco)
     atualizar(jobId, 'diagramando', 82, '📐 Diagramando o livro...');
-    const docxPath = path.join(tmpDir, 'livro.docx');
-    await gerarDocx(livro, docxPath);
+    const docxBuffer = await gerarDocxBuffer(livro);
 
     const nomeArquivo = livro.titulo.replace(/[^a-zA-Z0-9À-ú ]/g, '_').substring(0, 40) + '.docx';
-    job.docxPath = docxPath;
+    job.docxBuffer = docxBuffer;
     job.nomeArquivo = nomeArquivo;
     job.titulo = livro.titulo;
 
-    atualizar(jobId, 'notificando', 93, '📲 Enviando notificações...');
-    await Promise.allSettled([enviarEmail(job, jobId), enviarWhatsapp(job, jobId)]);
+    // 6. Enviar por e-mail COMO ANEXO (não depende de disco)
+    atualizar(jobId, 'notificando', 93, '📲 Enviando livro por e-mail...');
+    await Promise.allSettled([
+      enviarEmail(job, jobId),
+      enviarWhatsapp(job, jobId)
+    ]);
 
-    atualizar(jobId, 'pronto', 100, '✅ Livro pronto para download!');
+    atualizar(jobId, 'pronto', 100, '✅ Livro enviado por e-mail!');
 
   } catch(err) {
     jobs[jobId].status = 'erro';
@@ -162,8 +204,8 @@ ${transcricao.substring(0, 12000)}`;
   return JSON.parse(match[0]);
 }
 
-// ── GERAR DOCX ────────────────────────────────────────────────────────────
-async function gerarDocx(livro, outputPath) {
+// ── GERAR DOCX EM BUFFER ──────────────────────────────────────────────────
+async function gerarDocxBuffer(livro) {
   const FONT_T = 'Bebas Neue';
   const FONT_C = 'Palatino Linotype';
   const children = [];
@@ -209,12 +251,12 @@ async function gerarDocx(livro, outputPath) {
   const doc = new Document({
     sections: [{ properties: { page: { size: { width: 7938, height: 11906 }, margin: { top: 992, bottom: 992, left: 1134, right: 1134 } } }, children }]
   });
-  fs.writeFileSync(outputPath, await Packer.toBuffer(doc));
+  return await Packer.toBuffer(doc);
 }
 
-// ── EMAIL ─────────────────────────────────────────────────────────────────
+// ── EMAIL COM ANEXO ───────────────────────────────────────────────────────
 async function enviarEmail(job, jobId) {
-  if (!EMAIL_PASS || !job.email) return;
+  if (!EMAIL_PASS || !job.email || !job.docxBuffer) return;
   const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user: EMAIL_USER, pass: EMAIL_PASS } });
   await transporter.sendMail({
     from: `Lucel Digital <${EMAIL_USER}>`,
@@ -224,10 +266,11 @@ async function enviarEmail(job, jobId) {
       <h1 style="color:#C9A84C;">Lucel Digital</h1>
       <h2>Seu livro está pronto! 🎉</h2>
       <p>Olá, ${job.nome || 'autor'}!<br><br>
-      Seu livro <strong style="color:#C9A84C;">"${job.titulo || ''}"</strong> foi gerado e está disponível para download.</p>
-      <a href="${BASE_URL}/api/download/${jobId}" style="display:inline-block;background:#C9A84C;color:#000;font-weight:bold;padding:16px 40px;border-radius:6px;text-decoration:none;margin-top:16px;">📥 Baixar meu livro (.docx)</a>
+      Seu livro <strong style="color:#C9A84C;">"${job.titulo || ''}"</strong> está em anexo neste e-mail, pronto para baixar e publicar.</p>
+      <p style="font-size:13px;color:#aaa;margin-top:24px;">📎 O arquivo .docx está anexado abaixo.</p>
       <p style="font-size:12px;color:#888;margin-top:32px;">Lucel Digital · graficalucel@gmail.com · (11) 93496-4127</p>
-    </div>`
+    </div>`,
+    attachments: [{ filename: job.nomeArquivo, content: job.docxBuffer }]
   });
 }
 
@@ -235,7 +278,7 @@ async function enviarEmail(job, jobId) {
 async function enviarWhatsapp(job, jobId) {
   if (!job.whatsapp) return;
   const num = job.whatsapp.replace(/\D/g, '');
-  const msg = `🎉 *Olá, ${job.nome || 'autor'}!*\n\nSeu livro *"${job.titulo || 'YouTube → Livro'}"* ficou pronto!\n\n📥 Baixe agora:\n${BASE_URL}/api/download/${jobId}\n\n_Lucel Digital_`;
+  const msg = `🎉 *Olá, ${job.nome || 'autor'}!*\n\nSeu livro *"${job.titulo || 'YouTube → Livro'}"* ficou pronto!\n\n📎 Enviei o arquivo .docx no seu e-mail (${job.email}).\n\n_Lucel Digital_`;
   console.log('WhatsApp:', `https://wa.me/${num}?text=${encodeURIComponent(msg)}`);
 }
 
@@ -251,7 +294,7 @@ async function avisarInicio(job, jobId) {
       <h1 style="color:#C9A84C;">Lucel Digital</h1>
       <h2>Confirmamos seu pagamento! 🚀</h2>
       <p>Olá, ${job.nome || 'autor'}!<br><br>
-      Estamos gerando seu livro agora. Em breve você receberá o .docx no seu e-mail e WhatsApp.</p>
+      Estamos gerando seu livro agora. Em breve você receberá o .docx <strong>direto no seu e-mail</strong>.</p>
       <p style="font-size:12px;color:#888;margin-top:32px;">Lucel Digital · graficalucel@gmail.com · (11) 93496-4127</p>
     </div>`
   });
