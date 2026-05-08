@@ -144,7 +144,26 @@ app.post('/api/admin/upload/:jobId', adminAuth, async (req, res) => {
   }
 });
 
-// ── ADMIN: REENVIAR NOTIFICAÇÕES ──────────────────────────────────────────
+// ── ADMIN: PROCESSAR TRANSCRIÇÃO COLADA ──────────────────────────────────
+app.post('/api/admin/processar-texto/:jobId', adminAuth, async (req, res) => {
+  const job = jobs[req.params.jobId];
+  if (!job) return res.status(404).json({ erro: 'Não encontrado' });
+  const { transcricao } = req.body;
+  if (!transcricao || transcricao.length < 100) return res.status(400).json({ erro: 'Transcrição muito curta' });
+
+  job.transcricao = transcricao;
+  job.status = 'gerando';
+  job.progresso = 50;
+  job.mensagem = '🤖 Criando os 12 capítulos com IA...';
+  res.json({ ok: true });
+
+  processarComTranscricao(req.params.jobId).catch(err => {
+    jobs[req.params.jobId].status = 'erro';
+    jobs[req.params.jobId].mensagem = '❌ ' + err.message;
+  });
+});
+
+
 app.post('/api/admin/reenviar/:jobId', adminAuth, async (req, res) => {
   const job = jobs[req.params.jobId];
   if (!job) return res.status(404).json({ erro: 'Não encontrado' });
@@ -158,7 +177,41 @@ app.delete('/api/admin/excluir/:jobId', adminAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── PROCESSAMENTO: TRANSCREVER + GERAR LIVRO + DOCX ──────────────────────
+// ── PROCESSAR COM TRANSCRIÇÃO COLADA ─────────────────────────────────────
+async function processarComTranscricao(jobId) {
+  const job = jobs[jobId];
+  const tmpDir = `/tmp/job_${jobId}`;
+  fs.mkdirSync(tmpDir, { recursive: true });
+
+  try {
+    // Gerar livro
+    atualizar(jobId, 'gerando', 55, '🤖 Criando os 12 capítulos com IA...');
+    const livro = await gerarLivro(job.transcricao, job.nome);
+
+    // Diagramar
+    atualizar(jobId, 'diagramando', 82, '📐 Diagramando o livro...');
+    const docxPath = path.join(tmpDir, 'livro.docx');
+    await gerarDocx(livro, docxPath);
+
+    const nomeArquivo = livro.titulo.replace(/[^a-zA-Z0-9À-ú ]/g, '_').substring(0, 40) + '.docx';
+    job.docxPath = docxPath;
+    job.nomeArquivo = nomeArquivo;
+    job.titulo = livro.titulo;
+
+    // Notificar
+    atualizar(jobId, 'notificando', 93, '📲 Enviando notificações...');
+    await Promise.allSettled([enviarEmail(job, jobId), enviarWhatsapp(job, jobId)]);
+
+    atualizar(jobId, 'pronto', 100, '✅ Livro pronto para download!');
+
+  } catch(err) {
+    jobs[jobId].status = 'erro';
+    jobs[jobId].mensagem = '❌ ' + err.message;
+    throw err;
+  }
+}
+
+
 async function processarComUrl(jobId) {
   const job = jobs[jobId];
   const tmpDir = `/tmp/job_${jobId}`;
