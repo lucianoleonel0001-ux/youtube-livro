@@ -1,27 +1,17 @@
-# Usa a imagem oficial do Node.js
 FROM node:18-bullseye
 
-# Instala Python e FFmpeg (Essenciais para o yt-dlp)
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Cria a pasta do app
+# ESSA LINHA É A SOLUÇÃO DO SEU ÚLTIMO ERRO:
+RUN ln -s /usr/bin/python3 /usr/bin/python
+
 WORKDIR /usr/src/app
-
-# Copia os arquivos de dependências
 COPY package*.json ./
-
-# Instala as dependências do Node
 RUN npm install
-
-# COPIA TUDO (Certifique-se de que há um ESPAÇO entre os dois pontos abaixo)
 COPY . .
-
-# Expõe a porta 3000
 EXPOSE 3000
-
-# Comando para iniciar o servidor
 CMD [ "node", "server.js" ]
