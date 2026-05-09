@@ -17,7 +17,7 @@ COPY package*.json ./
 # Instala as dependências do Node
 RUN npm install
 
-# Copia o restante dos arquivos (incluindo cookies.txt e server.js)
+# COPIA TUDO (Certifique-se de que há um ESPAÇO entre os dois pontos abaixo)
 COPY . .
 
 # Expõe a porta 3000
