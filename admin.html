@@ -1,14 +1,27 @@
-async function processar() {
-    const input = document.querySelector('input[type="file"]');
+async function aprovarEProcessar() {
+    const fileInput = document.querySelector('input[type="file"]');
+    if (!fileInput.files[0]) return alert("Selecione um arquivo MP3 primeiro!");
+
     const formData = new FormData();
-    formData.append('audio', input.files[0]);
+    formData.append('audio', fileInput.files[0]);
 
-    // O segredo está nesta URL exata:
-    const response = await fetch('/api/processar', {
-        method: 'POST',
-        body: formData
-    });
+    try {
+        // Chamada direta para a API do seu server.js
+        const response = await fetch('/api/processar', {
+            method: 'POST',
+            body: formData
+        });
 
-    const data = await response.json();
-    alert(data.mensagem || data.erro);
+        // Tenta ler o JSON. Se o server.js devolveu JSON, não dá erro.
+        const data = await response.json(); 
+        
+        if (data.sucesso) {
+            alert("✅ " + data.mensagem);
+        } else {
+            alert("❌ Erro: " + data.erro);
+        }
+    } catch (error) {
+        console.error("Erro no fetch:", error);
+        alert("Erro técnico. Verifique se o servidor no Render está online.");
+    }
 }
