@@ -1,27 +1,44 @@
-async function aprovarEProcessar() {
-    const fileInput = document.querySelector('input[type="file"]');
-    if (!fileInput.files[0]) return alert("Selecione um arquivo MP3 primeiro!");
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel Admin - Lucel Digital</title>
+    <style>
+        body { font-family: sans-serif; padding: 40px; background: #fafafa; text-align: center; }
+        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block; }
+        button { background: #25d366; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 5px; cursor: pointer; margin-top: 20px; }
+        input { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin - Lucel Digital</h1>
+        <p>Selecione o MP3 para transformar em livro:</p>
+        <input type="file" id="arquivoMP3" accept="audio/mp3">
+        <br>
+        <button id="btnProcessar">Aprovar e Gerar Livro</button>
+    </div>
 
-    const formData = new FormData();
-    formData.append('audio', fileInput.files[0]);
+    <script>
+        document.getElementById('btnProcessar').onclick = async () => {
+            const input = document.getElementById('arquivoMP3');
+            if (!input.files[0]) return alert("Escolha um arquivo!");
 
-    try {
-        // Chamada direta para a API do seu server.js
-        const response = await fetch('/api/processar', {
-            method: 'POST',
-            body: formData
-        });
+            const formData = new FormData();
+            formData.append('audio', input.files[0]);
 
-        // Tenta ler o JSON. Se o server.js devolveu JSON, não dá erro.
-        const data = await response.json(); 
-        
-        if (data.sucesso) {
-            alert("✅ " + data.mensagem);
-        } else {
-            alert("❌ Erro: " + data.erro);
-        }
-    } catch (error) {
-        console.error("Erro no fetch:", error);
-        alert("Erro técnico. Verifique se o servidor no Render está online.");
-    }
-}
+            try {
+                const response = await fetch('/api/processar', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                alert(data.mensagem || data.erro);
+            } catch (e) {
+                alert("Erro ao conectar com o servidor.");
+            }
+        };
+    </script>
+</body>
+</html>
