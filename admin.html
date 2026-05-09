@@ -1,19 +1,14 @@
-<input type="file" id="inputAudio" accept="audio/*">
-<button onclick="enviarAudio('ID_DO_PEDIDO')">Aprovar e Processar</button>
+async function processar() {
+    const input = document.querySelector('input[type="file"]');
+    const formData = new FormData();
+    formData.append('audio', input.files[0]);
 
-<script>
-async function enviarAudio(jobId) {
-  const file = document.getElementById('inputAudio').files[0];
-  if (!file) return alert('Selecione o MP3 primeiro!');
+    // O segredo está nesta URL exata:
+    const response = await fetch('/api/processar', {
+        method: 'POST',
+        body: formData
+    });
 
-  const formData = new FormData();
-  formData.append('audio', file);
-
-  const res = await fetch(`/api/upload-audio/${jobId}`, {
-    method: 'POST',
-    body: formData
-  });
-  
-  if (res.ok) alert('Processamento iniciado!');
+    const data = await response.json();
+    alert(data.mensagem || data.erro);
 }
-</script>
