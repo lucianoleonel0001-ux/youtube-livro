@@ -1,17 +1,20 @@
 FROM node:18-bullseye
 
+# Instala FFmpeg e dependências de sistema
 RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
     ffmpeg \
+    python3 \
     && rm -rf /var/lib/apt/lists/*
 
-# ESSA LINHA É A SOLUÇÃO DO SEU ÚLTIMO ERRO:
-RUN ln -s /usr/bin/python3 /usr/bin/python
-
 WORKDIR /usr/src/app
+
+# Cria pastas necessárias com permissões totais
+RUN mkdir -p uploads && chmod 777 uploads
+
 COPY package*.json ./
 RUN npm install
+
 COPY . .
-EXPOSE 3000
+
+EXPOSE 10000
 CMD [ "node", "server.js" ]
