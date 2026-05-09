@@ -9,13 +9,12 @@ const nodemailer = require('nodemailer');
 const app = express();
 const port = process.env.PORT || 10000;
 
-// 1. CONFIGURAÇÃO DE UPLOAD
+// Configuração de pastas
+const dir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        const dir = 'uploads/';
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-        cb(null, dir);
-    },
+    destination: (req, file, cb) => cb(null, 'uploads/'),
     filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
 const upload = multer({ storage });
@@ -24,36 +23,35 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname));
 
-// 2. ROTAS DE INTERFACE
-app.get('/app', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
+// ROTAS DE INTERFACE
+app.get('/app', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
 
-app.get('/admin', (req, res) => {
-    res.sendFile(path.join(__dirname, 'admin.html'));
-});
-
-// 3. ROTA DE PROCESSAMENTO (O JavaScript do seu admin deve chamar ESTA URL)
+// ROTA DE API (Onde o erro ocorria)
 app.post('/api/processar', upload.single('audio'), async (req, res) => {
     try {
-        if (!req.file) return res.status(400).json({ erro: 'Selecione um arquivo MP3.' });
+        if (!req.file) {
+            return res.status(400).json({ sucesso: false, erro: 'Selecione um arquivo MP3.' });
+        }
 
         const emailCliente = req.body.email || process.env.EMAIL_USER;
-        const jobId = Date.now().toString();
-
-        // Inicia o processo em background
-        executarIA(jobId, req.file.path, emailCliente);
         
-        // RETORNA JSON (Para não dar o erro do Token <)
-        res.status(200).json({ sucesso: true, mensagem: "Processamento iniciado!" });
+        // Dispara o processamento sem travar a tela do admin
+        executarIA(req.file.path, emailCliente);
+        
+        // RESPOSTA SEMPRE EM JSON
+        return res.status(200).json({ 
+            sucesso: true, 
+            mensagem: 'Upload realizado! O livro será enviado para o e-mail em instantes.' 
+        });
 
     } catch (err) {
-        res.status(500).json({ erro: err.message });
+        console.error(err);
+        return res.status(500).json({ sucesso: false, erro: 'Erro interno no servidor.' });
     }
 });
 
-// 4. MOTOR DE IA
-async function executarIA(jobId, caminhoAudio, emailDestino) {
+async function executarIA(caminhoAudio, emailDestino) {
     try {
         const audioStream = fs.createReadStream(caminhoAudio);
         const upRes = await axios.post('https://api.assemblyai.com/v2/upload', audioStream, {
@@ -71,7 +69,7 @@ async function executarIA(jobId, caminhoAudio, emailDestino) {
                 headers: { 'authorization': process.env.ASSEMBLYAI_API_KEY }
             });
             if (poll.data.status === 'completed') { transcricao = poll.data.text; break; }
-            if (poll.data.status === 'error') throw new Error('Erro na transcrição');
+            if (poll.data.status === 'error') throw new Error('Erro transcrição');
             await new Promise(r => setTimeout(r, 5000));
         }
 
@@ -79,7 +77,7 @@ async function executarIA(jobId, caminhoAudio, emailDestino) {
         const msg = await anthropic.messages.create({
             model: "claude-3-5-sonnet-20240620",
             max_tokens: 4000,
-            messages: [{ role: "user", content: `Transforme esta transcrição em um capítulo de livro profissional: ${transcricao}` }]
+            messages: [{ role: "user", content: `Escreva um capítulo de livro baseado nesta transcrição: ${transcricao}` }]
         });
 
         const transporter = nodemailer.createTransport({
@@ -90,13 +88,13 @@ async function executarIA(jobId, caminhoAudio, emailDestino) {
         await transporter.sendMail({
             from: process.env.EMAIL_USER,
             to: emailDestino,
-            subject: `Lucel Digital - Livro Pronto`,
+            subject: `Lucel Digital - Livro Gerado`,
             text: msg.content[0].text
         });
 
-        if (fs.existsSync(caminhoAudio)) fs.unlinkSync(caminhoAudio);
+        fs.unlinkSync(caminhoAudio);
     } catch (err) {
-        console.error(`Erro:`, err.message);
+        console.error("Erro no processamento:", err.message);
     }
 }
 
