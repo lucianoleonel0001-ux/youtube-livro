@@ -4,107 +4,92 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 const Anthropic = require('@anthropic-ai/sdk');
+const nodemailer = require('nodemailer');
 
 const app = express();
 const port = process.env.PORT || 10000;
 
-// Configuração do Multer para salvar os áudios
+// Configuração de Armazenamento
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = 'uploads/';
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir);
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + '-' + file.originalname);
-  }
+    destination: (req, file, cb) => cb(null, 'uploads/'),
+    filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
 const upload = multer({ storage });
 
 app.use(express.json());
-app.use(express.static('public'));
 
-// Simulação de banco de dados (Substitua pela sua lógica de persistência se houver)
+// Banco de dados temporário para o progresso
 let jobs = {};
 
-// Rota para receber o pedido com áudio
-app.post('/api/upload-audio/:id', upload.single('audio'), async (req, res) => {
-  const jobId = req.params.id;
-  
-  if (!req.file) {
-    return res.status(400).send('Nenhum arquivo de áudio enviado.');
-  }
+// Rota Principal de Upload (Para seu Painel Admin)
+app.post('/api/processar/:id', upload.single('audio'), async (req, res) => {
+    const jobId = req.params.id;
+    if (!req.file) return res.status(400).json({ erro: 'Envie o arquivo MP3.' });
 
-  jobs[jobId] = {
-    status: 'processando',
-    progresso: 10,
-    arquivo: req.file.path,
-    mensagem: '📥 Áudio recebido. Iniciando transcrição...'
-  };
-
-  // Inicia o processo em segundo plano
-  processarAudio(jobId, req.file.path);
-  
-  res.send({ message: 'Upload concluído!', jobId });
+    jobs[jobId] = { status: 'iniciado', progresso: 10, mensagem: 'Arquivo recebido.' };
+    
+    // Executa o fluxo pesado em background
+    executarFluxoIA(jobId, req.file.path, req.body.emailCliente);
+    
+    res.json({ sucesso: true, jobId });
 });
 
-async function processarAudio(jobId, caminhoAudio) {
-  try {
-    // 1. Enviar para AssemblyAI
-    jobs[jobId].progresso = 30;
-    jobs[jobId].mensagem = '🎙️ Transcrevendo áudio...';
-    
-    const audioData = fs.readFileSync(caminhoAudio);
-    const uploadRes = await axios.post('https://api.assemblyai.com/v2/upload', audioData, {
-      headers: { authorization: process.env.ASSEMBLYAI_API_KEY }
-    });
+async function executarFluxoIA(jobId, caminhoAudio, emailDestino) {
+    try {
+        // 1. Transcrição (AssemblyAI)
+        jobs[jobId].progresso = 30;
+        const audioStream = fs.createReadStream(caminhoAudio);
+        const upRes = await axios.post('https://api.assemblyai.com/v2/upload', audioStream, {
+            headers: { 'authorization': process.env.ASSEMBLYAI_API_KEY, 'content-type': 'application/octet-stream' }
+        });
 
-    const transcriptRes = await axios.post('https://api.assemblyai.com/v2/transcript', {
-      audio_url: uploadRes.data.upload_url,
-      language_code: 'pt'
-    }, {
-      headers: { authorization: process.env.ASSEMBLYAI_API_KEY }
-    });
+        const transRes = await axios.post('https://api.assemblyai.com/v2/transcript', 
+            { audio_url: upRes.data.upload_url, language_code: 'pt' },
+            { headers: { 'authorization': process.env.ASSEMBLYAI_API_KEY } }
+        );
 
-    // Loop de verificação da transcrição
-    let transcript;
-    while (true) {
-      const pollingRes = await axios.get(`https://api.assemblyai.com/v2/transcript/${transcriptRes.data.id}`, {
-        headers: { authorization: process.env.ASSEMBLYAI_API_KEY }
-      });
-      if (pollingRes.data.status === 'completed') {
-        transcript = pollingRes.data.text;
-        break;
-      } else if (pollingRes.data.status === 'error') {
-        throw new Error('Falha na transcrição');
-      }
-      await new Promise(r => setTimeout(r, 5000));
+        let transcricao = '';
+        while (true) {
+            const poll = await axios.get(`https://api.assemblyai.com/v2/transcript/${transRes.data.id}`, {
+                headers: { 'authorization': process.env.ASSEMBLYAI_API_KEY }
+            });
+            if (poll.data.status === 'completed') { transcricao = poll.data.text; break; }
+            if (poll.data.status === 'error') throw new Error('Falha AssemblyAI');
+            await new Promise(r => setTimeout(r, 5000));
+        }
+
+        // 2. Escrita do Livro (Claude 3.5 Sonnet)
+        jobs[jobId].progresso = 70;
+        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+        const msg = await anthropic.messages.create({
+            model: "claude-3-5-sonnet-20240620",
+            max_tokens: 4000,
+            messages: [{ role: "user", content: `Escreva um capítulo de livro profissional e estruturado a partir desta transcrição: ${transcricao}` }]
+        });
+        const conteudoLivro = msg.content[0].text;
+
+        // 3. Envio por E-mail (Nodemailer)
+        jobs[jobId].progresso = 90;
+        const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
+        });
+
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: emailDestino,
+            subject: 'Seu Livro Gerado - Lucel Digital',
+            text: conteudoLivro
+        });
+
+        jobs[jobId].status = 'concluido';
+        jobs[jobId].progresso = 100;
+        fs.unlinkSync(caminhoAudio); // Deleta o áudio para economizar espaço
+
+    } catch (err) {
+        jobs[jobId].status = 'erro';
+        jobs[jobId].mensagem = err.message;
     }
-
-    // 2. Enviar para o Claude (Anthropic)
-    jobs[jobId].progresso = 70;
-    jobs[jobId].mensagem = '🤖 Claude está escrevendo o livro...';
-
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const msg = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20240620",
-      max_tokens: 4000,
-      messages: [{ role: "user", content: `Transforme esta transcrição em um capítulo de livro estruturado: ${transcript}` }],
-    });
-
-    // 3. Finalização (Aqui você enviaria o e-mail)
-    jobs[jobId].status = 'concluido';
-    jobs[jobId].progresso = 100;
-    jobs[jobId].mensagem = '✅ Livro gerado e pronto para envio!';
-    
-    // Limpeza opcional do arquivo
-    // fs.unlinkSync(caminhoAudio);
-
-  } catch (error) {
-    console.error(error);
-    jobs[jobId].status = 'erro';
-    jobs[jobId].mensagem = '❌ Erro no processamento.';
-  }
 }
 
-app.listen(port, () => console.log(`🚀 Servidor Lucel rodando na porta ${port}`));
+app.listen(port, () => console.log(`🚀 Lucel Digital Live na porta ${port}`));
