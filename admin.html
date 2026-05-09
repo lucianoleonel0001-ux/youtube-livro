@@ -1,85 +1,19 @@
-<!DOCTYPE html>
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel Admin - Lucel Digital</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f0f0f; color: #f5f0e8; padding: 40px; }
-        .container { max-width: 1000px; margin: 0 auto; }
-        h1 { color: #c9a84c; border-bottom: 2px solid #c9a84c; padding-bottom: 10px; }
-        .card { background: #1a1a1a; padding: 20px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }
-        .info { flex-grow: 1; }
-        .info b { color: #c9a84c; }
-        .status { font-size: 0.9em; color: #aaa; margin-top: 5px; }
-        button { background: #c9a84c; border: none; padding: 10px 20px; border-radius: 5px; font-weight: bold; cursor: pointer; transition: 0.3s; }
-        button:hover { background: #e0bc5a; }
-        button:disabled { background: #444; cursor: not-allowed; }
-        .refresh { margin-bottom: 20px; background: transparent; border: 1px solid #c9a84c; color: #c9a84c; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Gerenciamento de Pedidos</h1>
-        <button class="refresh" onclick="carregarJobs()">🔄 Atualizar Lista</button>
-        <div id="lista-jobs">
-            <p>Carregando pedidos...</p>
-        </div>
-    </div>
+<input type="file" id="inputAudio" accept="audio/*">
+<button onclick="enviarAudio('ID_DO_PEDIDO')">Aprovar e Processar</button>
 
-    <script>
-        const ADMIN_KEY = 'lucel2026'; // Deve ser a mesma do seu server.js
+<script>
+async function enviarAudio(jobId) {
+  const file = document.getElementById('inputAudio').files[0];
+  if (!file) return alert('Selecione o MP3 primeiro!');
 
-        async function carregarJobs() {
-            const container = document.getElementById('lista-jobs');
-            try {
-                const res = await fetch('/api/admin/jobs', {
-                    headers: { 'x-admin-key': ADMIN_KEY }
-                });
-                const jobs = await res.json();
-                
-                container.innerHTML = '';
-                
-                Object.keys(jobs).reverse().forEach(id => {
-                    const job = jobs[id];
-                    const div = document.createElement('div');
-                    div.className = 'card';
-                    div.innerHTML = `
-                        <div class="info">
-                            <b>${job.nome || 'Cliente'}</b> (${job.email})<br>
-                            <small>URL: <a href="${job.youtubeUrl}" target="_blank" style="color:#77f">${job.youtubeUrl}</a></small>
-                            <div class="status">Status: <b>${job.status}</b> | Progresso: ${job.progresso}%</div>
-                            <div style="font-size: 12px; color: #c9a84c">${job.mensagem || ''}</div>
-                        </div>
-                        <button onclick="processar('${id}')" ${job.status !== 'aguardando_pagamento' ? 'disabled' : ''}>
-                            ${job.status === 'aguardando_pagamento' ? '🚀 Iniciar Automação' : 'Em Processo'}
-                        </button>
-                    `;
-                    container.appendChild(div);
-                });
-            } catch (err) {
-                container.innerHTML = '<p>Erro ao carregar. Verifique a ADMIN_KEY.</p>';
-            }
-        }
+  const formData = new FormData();
+  formData.append('audio', file);
 
-        async function processar(jobId) {
-            if(!confirm('Confirmar pagamento e iniciar criação do livro?')) return;
-            
-            try {
-                await fetch(`/api/admin/processar/${jobId}`, {
-                    method: 'POST',
-                    headers: { 'x-admin-key': ADMIN_KEY }
-                });
-                alert('Processamento iniciado em background!');
-                carregarJobs();
-            } catch (err) {
-                alert('Erro ao iniciar.');
-            }
-        }
-
-        // Atualiza a cada 10 segundos
-        setInterval(carregarJobs, 10000);
-        carregarJobs();
-    </script>
-</body>
-</html>
+  const res = await fetch(`/api/upload-audio/${jobId}`, {
+    method: 'POST',
+    body: formData
+  });
+  
+  if (res.ok) alert('Processamento iniciado!');
+}
+</script>
