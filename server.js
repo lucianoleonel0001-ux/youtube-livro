@@ -9,35 +9,53 @@ const nodemailer = require('nodemailer');
 const app = express();
 const port = process.env.PORT || 10000;
 
-// Configuração de Armazenamento
+// 1. CONFIGURAÇÃO DE UPLOAD
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, 'uploads/'),
+    destination: (req, file, cb) => {
+        const dir = 'uploads/';
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir);
+        cb(null, dir);
+    },
     filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
 });
 const upload = multer({ storage });
 
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Banco de dados temporário para o progresso
-let jobs = {};
+// Serve arquivos estáticos da raiz (onde estão seus .html no GitHub)
+app.use(express.static(__dirname));
 
-// Rota Principal de Upload (Para seu Painel Admin)
-app.post('/api/processar/:id', upload.single('audio'), async (req, res) => {
-    const jobId = req.params.id;
-    if (!req.file) return res.status(400).json({ erro: 'Envie o arquivo MP3.' });
-
-    jobs[jobId] = { status: 'iniciado', progresso: 10, mensagem: 'Arquivo recebido.' };
-    
-    // Executa o fluxo pesado em background
-    executarFluxoIA(jobId, req.file.path, req.body.emailCliente);
-    
-    res.json({ sucesso: true, jobId });
+// 2. ROTAS DE INTERFACE (Resolve o erro "Cannot GET")
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'landing.html'));
 });
 
-async function executarFluxoIA(jobId, caminhoAudio, emailDestino) {
+app.get('/app', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+// 3. ROTA DE PROCESSAMENTO (Recebe o MP3 e gera o livro)
+app.post('/api/processar/:id', upload.single('audio'), async (req, res) => {
+    const jobId = req.params.id;
+    const emailCliente = req.body.email || process.env.EMAIL_USER;
+
+    if (!req.file) return res.status(400).json({ erro: 'Selecione um arquivo MP3.' });
+
+    // Inicia o processo em background
+    executarIA(jobId, req.file.path, emailCliente);
+    
+    res.json({ sucesso: true, mensagem: "Processamento iniciado!" });
+});
+
+// 4. MOTOR DE IA (AssemblyAI + Claude + E-mail)
+async function executarIA(jobId, caminhoAudio, emailDestino) {
     try {
-        // 1. Transcrição (AssemblyAI)
-        jobs[jobId].progresso = 30;
+        // Transcrição
         const audioStream = fs.createReadStream(caminhoAudio);
         const upRes = await axios.post('https://api.assemblyai.com/v2/upload', audioStream, {
             headers: { 'authorization': process.env.ASSEMBLYAI_API_KEY, 'content-type': 'application/octet-stream' }
@@ -54,22 +72,19 @@ async function executarFluxoIA(jobId, caminhoAudio, emailDestino) {
                 headers: { 'authorization': process.env.ASSEMBLYAI_API_KEY }
             });
             if (poll.data.status === 'completed') { transcricao = poll.data.text; break; }
-            if (poll.data.status === 'error') throw new Error('Falha AssemblyAI');
+            if (poll.data.status === 'error') throw new Error('Erro na transcrição');
             await new Promise(r => setTimeout(r, 5000));
         }
 
-        // 2. Escrita do Livro (Claude 3.5 Sonnet)
-        jobs[jobId].progresso = 70;
+        // Claude (Criação do Livro)
         const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
         const msg = await anthropic.messages.create({
             model: "claude-3-5-sonnet-20240620",
             max_tokens: 4000,
-            messages: [{ role: "user", content: `Escreva um capítulo de livro profissional e estruturado a partir desta transcrição: ${transcricao}` }]
+            messages: [{ role: "user", content: `Transforme esta transcrição em um capítulo de livro profissional: ${transcricao}` }]
         });
-        const conteudoLivro = msg.content[0].text;
 
-        // 3. Envio por E-mail (Nodemailer)
-        jobs[jobId].progresso = 90;
+        // Envio de E-mail
         const transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
@@ -78,18 +93,16 @@ async function executarFluxoIA(jobId, caminhoAudio, emailDestino) {
         await transporter.sendMail({
             from: process.env.EMAIL_USER,
             to: emailDestino,
-            subject: 'Seu Livro Gerado - Lucel Digital',
-            text: conteudoLivro
+            subject: `Lucel Digital - Seu Livro Pronto (ID ${jobId})`,
+            text: msg.content[0].text
         });
 
-        jobs[jobId].status = 'concluido';
-        jobs[jobId].progresso = 100;
-        fs.unlinkSync(caminhoAudio); // Deleta o áudio para economizar espaço
+        if (fs.existsSync(caminhoAudio)) fs.unlinkSync(caminhoAudio);
+        console.log(`✅ Sucesso no pedido ${jobId}`);
 
     } catch (err) {
-        jobs[jobId].status = 'erro';
-        jobs[jobId].mensagem = err.message;
+        console.error(`❌ Erro no pedido ${jobId}:`, err.message);
     }
 }
 
-app.listen(port, () => console.log(`🚀 Lucel Digital Live na porta ${port}`));
+app.listen(port, () => console.log(`🚀 Lucel Digital rodando na porta ${port}`));
