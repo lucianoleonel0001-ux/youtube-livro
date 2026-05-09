@@ -24,10 +24,11 @@
                     body: formData
                 });
 
+                // Correção: agora o servidor envia JSON, então o .json() funciona
                 const data = await response.json();
                 alert(data.mensagem || "Sucesso!");
             } catch (error) {
-                alert("Erro ao conectar com o servidor.");
+                alert("Erro técnico. O servidor pode estar reiniciando no Render.");
             }
         }
     </script>
