@@ -3,29 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <title>Painel Admin - Lucel Digital</title>
-    <style>
-        body { font-family: sans-serif; padding: 40px; background: #fafafa; text-align: center; }
-        .container { background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: inline-block; }
-        button { background: #25d366; color: white; border: none; padding: 12px 24px; font-size: 16px; border-radius: 5px; cursor: pointer; margin-top: 20px; }
-        input { margin-top: 10px; }
-    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Admin - Lucel Digital</h1>
-        <p>Selecione o MP3 para transformar em livro:</p>
-        <input type="file" id="arquivoMP3" accept="audio/mp3">
-        <br>
-        <button id="btnProcessar">Aprovar e Gerar Livro</button>
+    <div style="padding: 20px;">
+        <input type="file" id="audio" accept="audio/mp3">
+        <button onclick="processar()">Aprovar e Processar</button>
     </div>
 
     <script>
-        document.getElementById('btnProcessar').onclick = async () => {
-            const input = document.getElementById('arquivoMP3');
-            if (!input.files[0]) return alert("Escolha um arquivo!");
+        async function processar() {
+            const fileInput = document.getElementById('audio');
+            if (!fileInput.files[0]) return alert("Selecione o arquivo!");
 
             const formData = new FormData();
-            formData.append('audio', input.files[0]);
+            formData.append('audio', fileInput.files[0]);
 
             try {
                 const response = await fetch('/api/processar', {
@@ -34,11 +25,11 @@
                 });
 
                 const data = await response.json();
-                alert(data.mensagem || data.erro);
-            } catch (e) {
+                alert(data.mensagem || "Sucesso!");
+            } catch (error) {
                 alert("Erro ao conectar com o servidor.");
             }
-        };
+        }
     </script>
 </body>
 </html>
